@@ -26,10 +26,16 @@ change done.
 |---|---|
 | `src/main.rs` | Calls `cli::run`. Nothing else goes here |
 | `src/lib.rs` | The library. The CLI and the web UI are both clients of it |
-| `src/cli.rs` | Argument parsing and rendering only. No logic a web handler would also need |
+| `src/cli/` | Argument parsing and rendering only. No logic a web handler would also need |
+| `src/schedule/` | Parsing schedules, converting them for launchd, describing them, predicting runs |
+| `src/job.rs` | A job and its validation |
+| `src/config.rs` | Reading `jobs.toml`, and editing it without losing comments |
+| `src/launchd.rs` | Plists, `launchctl`, and reconciling launchd with `jobs.toml` |
+| `src/exec.rs` | Running a job's command: shell, workdir, env, timeout |
+| `src/duration.rs` | Durations as people write them (`15m`, `1h 30m`) |
 | `src/error.rs` | Every error and its stable code |
 | `src/paths.rs` | Where config, state and plists live, and the environment overrides |
-| `tests/` | The built binary's contract: arguments, output, exit status |
+| `tests/` | The built binary end to end, against a sandbox and a stand-in `launchctl` (`tests/support/`) |
 | `docs/plan.md` | The plan |
 
 ## Rules

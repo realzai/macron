@@ -233,7 +233,8 @@ These are tested, not just implemented.
 ## Testing
 
 - **Unit:** schedule parsing, expansion, description and next-run (property tests against `croner`);
-  plist generation (`insta` snapshots); `jobs.toml` edits preserve comments; path resolution.
+  plist generation (compared with literal XML); `jobs.toml` edits preserve comments; path
+  resolution.
 - **Integration:** the built binary, run with `MACRON_CONFIG_DIR`, `MACRON_STATE_DIR` and
   `MACRON_LAUNCH_AGENTS_DIR` in a temp dir and `MACRON_LAUNCHCTL` pointing at a fake. `exec` runs
   real short commands (`echo hi; exit 3`) and the tests read the history row and the log back.
@@ -253,7 +254,7 @@ Each one ends with something usable and its tests passing in CI.
 **M0. Scaffold (done).** The crate, the dependencies, `macron paths`, the `--json` and error
 conventions with their tests, CI, `AGENTS.md`, this plan.
 
-**M1. Jobs reach launchd.** `jobs.toml` load and locked save; the schedule module (parse, expand,
+**M1. Jobs reach launchd (done).** `jobs.toml` load and locked save; the schedule module (parse, expand,
 describe, next run); plist generation; the `launchctl` wrapper; `add`, `edit`, `rm`, `ls`, `show`,
 `enable`, `disable`, `apply --dry-run`; a first `exec` that runs the job's command with its shell,
 working directory, environment and timeout, its output going to launchd's log until M2 records it.
