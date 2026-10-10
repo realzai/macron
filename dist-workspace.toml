@@ -10,13 +10,10 @@ ci = "github"
 hosting = "github"
 # macron drives launchd, so it is built for macOS only.
 targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
-installers = ["shell", "homebrew"]
-# The formula is `macron`, installed with `brew install realzai/tap/macron`.
-tap = "realzai/homebrew-tap"
-formula = "macron"
-# The tap is updated with the HOMEBREW_TAP_TOKEN secret. ./publish-crates is
-# .github/workflows/publish-crates.yml.
-publish-jobs = ["homebrew", "./publish-crates"]
+# No Homebrew formula for now: a tap is a public repository of its own. See docs/plan.md.
+installers = ["shell"]
+# ./publish-crates is .github/workflows/publish-crates.yml.
+publish-jobs = ["./publish-crates"]
 # The shell installer puts `macron` where `cargo install` would: a path that stays put across
 # upgrades, which the jobs installed into launchd depend on.
 install-path = "CARGO_HOME"

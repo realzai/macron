@@ -22,13 +22,7 @@ launchd, a record of every run, and a notification when one fails.
 
 ## Install
 
-With [Homebrew](https://brew.sh):
-
-```sh
-brew install realzai/tap/macron
-```
-
-Or with the installer from the [latest release](https://github.com/realzai/macron/releases/latest),
+With the installer from the [latest release](https://github.com/realzai/macron/releases/latest),
 which puts `macron` in `~/.cargo/bin`:
 
 ```sh
