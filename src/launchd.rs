@@ -250,6 +250,22 @@ pub fn apply(changes: &[Change], paths: &Paths, launchctl: &Launchctl) -> Result
     Ok(())
 }
 
+/// The program each plist macron has installed runs, by job name: what launchd starts for it.
+/// `None` for a plist that is not in the shape macron writes.
+pub fn installed_programs(dir: &Path) -> Result<BTreeMap<String, Option<PathBuf>>> {
+    let programs = installed(dir)?
+        .into_iter()
+        .map(|(job, plist)| (job, program(&plist)))
+        .collect();
+    Ok(programs)
+}
+
+fn program(plist: &[u8]) -> Option<PathBuf> {
+    let value = Value::from_reader(io::Cursor::new(plist)).ok()?;
+    let arguments = value.as_dictionary()?.get("ProgramArguments")?.as_array()?;
+    arguments.first()?.as_string().map(PathBuf::from)
+}
+
 /// The plists macron has installed, by job name.
 fn installed(dir: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
     let entries = match fs::read_dir(dir) {
@@ -473,6 +489,16 @@ mod tests {
     fn renders_every_minute_as_one_empty_entry() {
         let expected = "\t<key>StartCalendarInterval</key>\n\t<array>\n\t\t<dict/>\n\t</array>\n";
         assert_eq!(rendered("* * * * *"), format!("{HEAD}{expected}{TAIL}"));
+    }
+
+    #[test]
+    fn reads_back_the_program_a_plist_runs() {
+        let plist = rendered("@daily");
+        assert_eq!(
+            program(plist.as_bytes()),
+            Some(PathBuf::from("/bin/macron"))
+        );
+        assert_eq!(program(b"not a plist"), None);
     }
 
     #[test]

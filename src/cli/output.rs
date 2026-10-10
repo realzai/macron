@@ -69,6 +69,14 @@ impl Paint {
         self.paint("2", text)
     }
 
+    pub fn green(self, text: &str) -> String {
+        self.paint("32", text)
+    }
+
+    pub fn yellow(self, text: &str) -> String {
+        self.paint("33", text)
+    }
+
     fn paint(self, code: &str, text: &str) -> String {
         if self.enabled {
             format!("\x1b[{code}m{text}\x1b[0m")

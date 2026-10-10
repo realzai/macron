@@ -1,6 +1,7 @@
 //! The command line. Parsing and rendering only: each command calls into the library and prints
 //! what comes back, as text for people or, with `--json`, as JSON for scripts and agents.
 
+mod doctor;
 mod jobs;
 mod output;
 mod runs;
@@ -104,6 +105,8 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Check for anything that would stop jobs running as configured, and say how to fix it
+    Doctor,
     /// Show where macron reads jobs from and writes run history and logs to
     Paths,
     /// Run a job now, the way launchd does. This is what installed jobs run
@@ -164,6 +167,7 @@ fn execute(command: Command, json: bool) -> Result<ExitCode> {
             },
         )?,
         Command::Apply { dry_run } => jobs::apply(&ctx, dry_run)?,
+        Command::Doctor => doctor::doctor(&ctx)?,
         Command::Paths => paths(&ctx)?,
         Command::Exec { job } => return exec(&ctx, &job),
     }
