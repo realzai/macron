@@ -241,7 +241,7 @@ The [job](#job), with these added:
 | Field | |
 |---|---|
 | `job` | The [job](#job) after the change |
-| `changes` | The [changes](#change) made to launchd for it. Empty when launchd needed none, as when editing a disabled job |
+| `changes` | The [changes](#change) made to launchd for it. Empty when launchd needed none: launchd holds only a job's schedule, and macron reads every other setting each time the job runs, so changing anything else, or editing a disabled job, changes nothing there |
 
 ### `macron rm <job>`
 

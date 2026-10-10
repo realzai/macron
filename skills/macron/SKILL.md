@@ -15,9 +15,15 @@ cron, launchd runs a job missed while the Mac slept, once, when it wakes.
   `cargo install --git https://github.com/realzai/macron`.
 - **Always pass `--json`, before any `--`.** Everything after `--` is the job's command, so
   `macron add x -s @daily -- ./sync --json` adds a job that runs `./sync --json`.
+- **Single-quote the job's command and any `~` or `$VAR` in it**, so they reach the job as
+  written and are expanded when it runs, in the user's environment, not by your shell now. macron
+  expands a leading `~` in `--workdir` itself.
 - Output is one JSON document on stdout. An error goes to stderr as
   `{"error":{"code":"…","message":"…"}}` with exit status 1, or 2 for a command line that did not
   parse. Match on `code`, read `message`.
+- `macron run --wait` is the exception: it exits with the job's own exit status, so a job that
+  exits 1 or 2 looks like a macron error by status alone. Tell them apart by the output: a Run on
+  stdout, or an error on stderr.
 - A job runs unattended on the user's Mac. Before adding one or changing what it runs, be sure the
   user wants that command run on that schedule. Ask before `rm`, and before `--purge`, which
   deletes the job's run history.
@@ -28,13 +34,13 @@ cron, launchd runs a job missed while the Mac slept, once, when it wakes.
 
 | Command | Does | Prints |
 |---|---|---|
-| `macron ls --json` | Every job and where it stands | `{"jobs": [Job], "in_sync": bool}` |
+| `macron ls --json` | Every job and where it stands; `in_sync` `false` means run `macron apply --json` | `{"jobs": [Job], "in_sync": bool}` |
 | `macron show <job> --json` | One job, with its next five runs and file paths | Job + `next_runs`, `label`, `plist`, `launchd_log` |
 | `macron add <job> --json -s <schedule> [options] -- <command>` | Adds a job and installs it | `{"job": Job, "changes": [...]}` |
 | `macron edit <job> --json [options] [-- <command>]` | Changes a job and reinstalls it | same as `add` |
 | `macron disable <job> --json` / `enable` | Pauses or resumes a job, keeping it | same as `add` |
 | `macron rm <job> --yes --json [--purge]` | Removes a job; `--purge` also deletes its runs | `{"removed", "purged_runs", "changes"}` |
-| `macron run <job> --wait --json` | Runs it now, through launchd, and waits | the finished Run; exits with the run's status |
+| `macron run <job> --wait --json` | Runs it now, through launchd, and waits | the finished Run; exits with the job's exit status |
 | `macron runs [<job>] --json [--status failed] [--limit N]` | Recent runs, newest first | `{"runs": [Run]}` |
 | `macron logs <job> --json [--run <id>]` | A run's output, the latest by default | `{"run": Run, "lines": [{"time", "stream", "text"}]}` |
 | `macron doctor --json` | Checks everything that stops jobs running | `{"healthy", "checks": [...], "notes": [...]}` |
@@ -42,10 +48,16 @@ cron, launchd runs a job missed while the Mac slept, once, when it wakes.
 | `macron paths --json` | Where jobs, history and logs live | paths |
 | `macron up --no-open --json` | Serves the web UI for the user; prints `sign_in_url` | one line, then keeps running |
 
+`changes` lists what was done to launchd: `install`, `update`, `load` or `remove`. launchd holds
+only when a job runs, so a new schedule, `disable` or `enable` changes it. The command and every
+other setting are read each time the job runs, so changing only those gives `"changes": []` and
+takes effect from the next run.
+
 Options for `add` and `edit`: `-d <description>`, `--workdir <dir>` (default `~`),
-`--shell <path>` (default `/bin/zsh`), `-e KEY=VALUE` (repeatable), `--timeout <duration>`
-(`30m`, `1h 30m`), `--notify never|failure|always` (default `failure`), `--keep-runs <N>` (default
-100), `--disabled` (`add` only). `edit --unset <field>` puts a field back to its default.
+`--shell <path>` (default `/bin/zsh`), `-e KEY=VALUE` (repeatable; the value is used as written,
+with no `~` or `$VAR` expansion), `--timeout <duration>` (`30m`, `1h 30m`),
+`--notify never|failure|always` (a macOS notification; default `failure`), `--keep-runs <N>`
+(default 100), `--disabled` (`add` only). `edit --unset <field>` puts a field back to its default.
 
 Job names are lowercase letters, digits, `-` and `_`.
 
@@ -57,7 +69,8 @@ Run or `null`). `state` is `active` when launchd will run it; anything else (`no
 
 **Run** fields: `id`, `job`, `trigger` (`schedule` or `manual`), `status`, `started_at`,
 `finished_at`, `duration_ms`, `exit_code`, `signal`, `error`, `command`, `log_bytes`,
-`log_truncated`. `status` is `running`, `succeeded`, `failed`, `timed_out` or `lost`. In a log
+`log_truncated`. `id` is numbered across all jobs, not per job: one job's runs can be 1, 3, 5.
+`status` is `running`, `succeeded`, `failed`, `timed_out` or `lost`. In a log
 line, `stream` is `out`, `err`, or `macron` for macron's own notes, such as a timeout.
 
 ## Schedules
@@ -101,12 +114,14 @@ the user asked for.
 2. `macron runs <job> --json --limit 10`: look for a pattern. Always failing? Since when? Only on
    schedule (`trigger: schedule`) and not by hand?
 3. `macron logs <job> --json --run <id>` for a failed run. Read the `err` and `macron` lines.
-4. `macron doctor --json`: every check with `severity` `problem` or `warning` has a `fix`.
+4. If the log does not explain it, `macron doctor --json`: every check with `severity` `problem`
+   or `warning` has a `fix`. It checks the machine and each job's shell and workdir, not whether
+   the programs a command calls exist.
 5. Match the evidence:
 
 | Evidence | Cause | Fix |
 |---|---|---|
-| `exit_code` 127, "command not found" | The program is not on the job's `PATH`. Jobs run in a non-interactive login shell (`zsh -lc` by default), which reads `~/.zprofile` but not `~/.zshrc` | Use the program's absolute path (`which <program>` in the user's shell), set `-e PATH=...`, or move the user's `PATH` setup to `~/.zprofile` (ask first) |
+| `exit_code` 127, "command not found" | The program is not on the job's `PATH`. Jobs run in a non-interactive login shell (`zsh -lc` by default), which reads `~/.zprofile` but not `~/.zshrc` | Find the program: `zsh -ic 'command -v <program>'` reads `~/.zshrc` as the user's terminal does, or look for `PATH` in `~/.zshrc`. Then prefer, in order: its absolute path in the command, which changes only this job; a full `-e PATH=/Users/<user>/tools:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`, written out because `$PATH` is not expanded; moving the user's `PATH` setup to `~/.zprofile`, which changes every job and shell (ask first) |
 | `exit_code` 126 | The script is not executable | `chmod +x` it |
 | "Operation not permitted" reading `~/Documents`, `~/Desktop`, `~/Downloads` or app data | macOS privacy protection. It can start after macron is upgraded or rebuilt, which can drop an earlier grant | Only the user can fix it: System Settings → Privacy & Security → Full Disk Access, add the macron binary named in `doctor`'s `notes` |
 | `status` `timed_out` | It ran past `timeout` | Find why it hangs (often waiting for input or a network), or raise `--timeout` |
@@ -161,6 +176,7 @@ the user asked for.
 | `already_running` | launchd does not start a job twice | Wait; `macron logs <job> --json` shows progress |
 | `did_not_start` | launchd did not start it within 10 seconds | `macron doctor --json`, and read the job's `launchd_log` |
 | `no_runs` | `logs` for a job that has never run | Nothing to read yet |
+| `no_such_run` | `logs --run <id>` with an id that is not one of this job's runs | `macron runs <job> --json` lists its ids |
 | `launchctl`, `database`, `io` | Something on the machine failed | `macron doctor --json` |
 
 The full reference, every command's options and every field and code, is in
