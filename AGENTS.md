@@ -31,11 +31,15 @@ change done.
 | `src/job.rs` | A job and its validation |
 | `src/config.rs` | Reading `jobs.toml`, and editing it without losing comments |
 | `src/launchd.rs` | Plists, `launchctl`, and reconciling launchd with `jobs.toml` |
-| `src/exec.rs` | Running a job's command: shell, workdir, env, timeout |
+| `src/exec.rs` | Running a job: the command, its output, its timeout, and recording the run |
+| `src/history.rs` | The run history database |
+| `src/runlog.rs` | Per-run output logs |
+| `src/notify.rs` | macOS notifications about finished runs |
+| `src/time.rs` | Times as macron writes them for machines |
 | `src/duration.rs` | Durations as people write them (`15m`, `1h 30m`) |
 | `src/error.rs` | Every error and its stable code |
 | `src/paths.rs` | Where config, state and plists live, and the environment overrides |
-| `tests/` | The built binary end to end, against a sandbox and a stand-in `launchctl` (`tests/support/`) |
+| `tests/` | The built binary end to end, against a sandbox with stand-ins for `launchctl` and `osascript` (`tests/support/`) |
 | `docs/plan.md` | The plan |
 
 ## Rules
@@ -49,8 +53,11 @@ change done.
 - **Never prompt without a terminal.** A destructive command asks on a TTY and otherwise requires
   `--yes`.
 - **Tests never touch the real machine.** Set `MACRON_CONFIG_DIR`, `MACRON_STATE_DIR` and
-  `MACRON_LAUNCH_AGENTS_DIR` to a temp dir, and `MACRON_LAUNCHCTL` to a fake, on the child process.
-  Tests that really load a job into launchd are `#[ignore]`d and run by hand.
+  `MACRON_LAUNCH_AGENTS_DIR` to a temp dir, and `MACRON_LAUNCHCTL` and `MACRON_OSASCRIPT` to the
+  stand-ins in `tests/support/`, on the child process; `tests/support/mod.rs` does all of it. A
+  library test that runs a job passes a `Notifier` for `/usr/bin/true`, so it never posts a real
+  notification. `tests/launchd.rs` is the exception: it uses the real launchd, so it is
+  `#[ignore]`d. Run it on a Mac before a release with `cargo test --test launchd -- --ignored`.
 - **No `std::env::set_var`.** It is `unsafe` in edition 2024 and the crate forbids `unsafe`. Pass
   environment to a child process, or resolve through a lookup closure as `Paths::resolve` does.
 - **Never parse `launchctl` output.** Its format is undocumented. Use exit statuses.
