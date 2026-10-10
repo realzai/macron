@@ -43,7 +43,7 @@ toml = "1.1.8"
 toml_edit = "0.25.17"
 
 [dev-dependencies]
-croner = "4.0.1"
+croner = { version = "4.0.1", default-features = false, features = ["jiff"] }
 insta = "1.49.0"
 proptest = "1.11.0"
 tempfile = "3.27.0"

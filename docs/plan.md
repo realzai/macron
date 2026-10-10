@@ -117,16 +117,21 @@ the web, and take an exclusive `File::lock` on the file for the read-modify-writ
 macron parses schedules itself and owns the conversion, because the conversion is the product:
 
 - **Cron to launchd.** `StartCalendarInterval` has no ranges or steps, so each restricted field is
-  expanded and the result is the cartesian product, one dict per combination. An unrestricted
-  field is omitted, which launchd reads as "any". `*/15 * * * *` becomes 4 dicts.
-  `*/5 9-17 * * 1-5` becomes 540; that is fine, and `apply` refuses anything over a cap (2,000).
-- **Day-of-month and day-of-week.** Cron ORs them when both are restricted; a launchd dict ANDs its
-  keys. Both restricted means two dict sets, one per field.
+  expanded and the result is the cartesian product, one dict per combination. A field that allows
+  every value is omitted, which launchd reads as "any". `*/15 * * * *` becomes 4 dicts.
+  `*/5 9-17 * * 1-5` becomes 540; that is fine, and a schedule needing more than 1,000 is refused
+  when it is parsed.
+- **Day-of-month and day-of-week.** Cron runs on days matching either field when both are
+  restricted. macron never puts `Day` and `Weekday` in the same dict, so it does not depend on how
+  launchd combines them: both restricted means two dict sets, one per field, whose union is cron's
+  "either". A field counts as restricted unless it is exactly `*`.
+- **Refused at parse time:** schedules that never run (`0 0 30 2 *`), `@every` under 10 seconds
+  (launchd's minimum), and the cron extensions launchd cannot express (`L`, `W`, `#`, `?`).
 - **`@every`** becomes `StartInterval`. launchd counts it from when the job was loaded, not from a
   wall-clock boundary, and the docs must say so.
-- **Describing and predicting.** The same parse produces the plain-English description ("09:00 on
-  day 1 of the month") and the next run times shown in `ls` and the web UI, computed in local time
-  with `jiff`.
+- **Describing and predicting.** The same parse produces the plain-English description ("at 09:00
+  on the 1st of every month") and the next run times shown in `ls` and the web UI, computed in local
+  time with `jiff`.
 
 The parser is checked against `croner` as an oracle in property tests: for random expressions, the
 next run times must agree.

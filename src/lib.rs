@@ -4,5 +4,7 @@
 //! what one can do the other can, and they cannot disagree about what happened.
 
 pub mod cli;
+pub mod duration;
 pub mod error;
 pub mod paths;
+pub mod schedule;

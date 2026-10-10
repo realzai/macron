@@ -12,6 +12,12 @@ pub enum Error {
     #[error("{var} must be an absolute path, got {value:?}")]
     RelativePath { var: &'static str, value: PathBuf },
 
+    #[error("invalid schedule {schedule:?}: {reason}")]
+    InvalidSchedule { schedule: String, reason: String },
+
+    #[error("invalid duration {value:?}: {reason}")]
+    InvalidDuration { value: String, reason: String },
+
     #[error("cannot encode output as JSON: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -21,6 +27,8 @@ impl Error {
         match self {
             Error::NoHome => "no_home",
             Error::RelativePath { .. } => "relative_path",
+            Error::InvalidSchedule { .. } => "invalid_schedule",
+            Error::InvalidDuration { .. } => "invalid_duration",
             Error::Json(_) => "internal",
         }
     }
