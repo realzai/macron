@@ -1,6 +1,7 @@
-//! The reference docs against the binary: every error code macron can print, and every field of
-//! the JSON its commands print, must be in `docs/json.md`. (`docs/cli.md` is checked where it is
-//! generated, in `src/cli/reference.rs`.)
+//! The reference docs and the skill against the binary: every error code macron can print, and
+//! every field of the JSON its commands print, must be in `docs/json.md`, and the skill must name
+//! only codes that exist. (`docs/cli.md` is checked where it is generated, in
+//! `src/cli/reference.rs`.)
 
 mod support;
 
@@ -59,6 +60,36 @@ fn every_error_code_is_documented_and_every_documented_code_exists() {
     assert!(
         unknown.is_empty(),
         "docs/json.md documents codes macron does not have: {unknown:?}"
+    );
+}
+
+#[test]
+fn the_skill_names_only_real_error_codes() {
+    let skill = read("skills/macron/SKILL.md");
+    let start = skill.find("\n## Errors you will meet\n").unwrap();
+    let section = &skill[start + 1..];
+    let section = &section[..section[1..].find("\n## ").unwrap()];
+    let codes = error_codes();
+    let named: Vec<String> = section
+        .lines()
+        .filter_map(|line| line.strip_prefix("| `"))
+        // The header row names its column `code`.
+        .skip(1)
+        .flat_map(|row| {
+            let cell = &row[..row.find(" |").unwrap()];
+            cell.split(", ")
+                .map(|code| code.trim_matches('`').to_owned())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert!(
+        named.len() > 10,
+        "found too few codes in the skill: {named:?}"
+    );
+    let unknown: Vec<_> = named.iter().filter(|code| !codes.contains(*code)).collect();
+    assert!(
+        unknown.is_empty(),
+        "skills/macron/SKILL.md names codes macron does not have: {unknown:?}"
     );
 }
 
