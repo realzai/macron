@@ -1,0 +1,49 @@
+[package]
+name = "macron-cli"
+version = "0.0.0"
+edition = "2024"
+# 1.89 stabilised File::lock, which guards jobs.toml against concurrent edits from the CLI and the web UI.
+rust-version = "1.89"
+description = "Schedule, run and watch local jobs on macOS, backed by launchd, from a CLI or a local web UI"
+repository = "https://github.com/realzai/macron"
+readme = "README.md"
+keywords = ["cron", "launchd", "macos", "scheduler", "cli"]
+categories = ["command-line-utilities"]
+publish = false
+
+[lib]
+name = "macron"
+path = "src/lib.rs"
+
+[[bin]]
+name = "macron"
+path = "src/main.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[dependencies]
+anyhow = "1.0.104"
+askama = "0.16.1"
+axum = "0.8.9"
+clap = { version = "4.6.7", features = ["derive", "env", "wrap_help"] }
+jiff = { version = "0.2.38", features = ["serde"] }
+nix = { version = "0.31.3", features = ["signal", "process"] }
+plist = "1.10.1"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+rust-embed = "8.13.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.21"
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "process", "signal", "time", "fs", "io-util", "net", "sync"] }
+toml = "1.1.8"
+toml_edit = "0.25.17"
+
+[dev-dependencies]
+croner = "4.0.1"
+insta = "1.49.0"
+proptest = "1.11.0"
+tempfile = "3.27.0"
