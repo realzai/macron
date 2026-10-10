@@ -1,0 +1,21 @@
+# Publishes macron-cli to crates.io. The release workflow runs it once the release is built, as the
+# `./publish-crates` entry of `publish-jobs` in dist-workspace.toml.
+name: Publish to crates.io
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  publish:
+    # `cargo publish` builds the crate before uploading it, and macron builds on macOS only.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
