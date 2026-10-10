@@ -1,6 +1,6 @@
 [package]
 name = "macron-cli"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
 # 1.89 stabilised File::lock, which guards jobs.toml against concurrent edits from the CLI and the web UI.
 rust-version = "1.89"
