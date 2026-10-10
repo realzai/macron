@@ -1,0 +1,272 @@
+/* macron's web UI. One stylesheet, light and dark, no framework. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --text: #1c1917;
+  --muted: #78716c;
+  --border: #e7e5e4;
+  --accent: #2563eb;
+  --accent-text: #ffffff;
+  --ok: #15803d;
+  --ok-bg: #dcfce7;
+  --bad: #b91c1c;
+  --bad-bg: #fee2e2;
+  --warn: #a16207;
+  --warn-bg: #fef9c3;
+  --running: #1d4ed8;
+  --running-bg: #dbeafe;
+  --off: #57534e;
+  --off-bg: #f5f5f4;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c0a09;
+    --surface: #1c1917;
+    --text: #f5f5f4;
+    --muted: #a8a29e;
+    --border: #292524;
+    --accent: #3b82f6;
+    --ok: #4ade80;
+    --ok-bg: #14532d;
+    --bad: #f87171;
+    --bad-bg: #450a0a;
+    --warn: #facc15;
+    --warn-bg: #422006;
+    --running: #93c5fd;
+    --running-bg: #1e3a8a;
+    --off: #a8a29e;
+    --off-bg: #292524;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, sans-serif;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre { font-family: var(--mono); font-size: 0.9em; }
+h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 4px; }
+h2 { font-size: 1.1rem; margin: 32px 0 12px; }
+
+/* The bar along the top. */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.brand { font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+.brand:hover { text-decoration: none; }
+.bar nav { display: flex; gap: 16px; flex: 1; }
+.bar nav a { color: var(--muted); }
+.bar nav a[aria-current] { color: var(--text); font-weight: 600; }
+
+main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.narrow { max-width: 640px; }
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.page-head p { margin: 0; }
+.crumbs { color: var(--muted); font-size: 0.9rem; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.actions form, .row-actions form, .notice form { margin: 0; }
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.button:hover { text-decoration: none; border-color: var(--muted); }
+.button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.button.danger { color: var(--bad); }
+.button.small { padding: 3px 10px; font-size: 0.85rem; }
+
+.muted { color: var(--muted); font-size: 0.9em; }
+.nowrap { white-space: nowrap; }
+
+/* Tables of jobs and runs. */
+.table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+table { width: 100%; border-collapse: collapse; }
+th {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+td code { white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.name { font-weight: 600; }
+.row-actions { text-align: right; }
+
+/* Status: a badge for a run, a pill for a job's state. */
+.badge, .state {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+a.badge:hover { text-decoration: none; filter: brightness(0.95); }
+.ok { color: var(--ok); background: var(--ok-bg); }
+.bad { color: var(--bad); background: var(--bad-bg); }
+.warn { color: var(--warn); background: var(--warn-bg); }
+.running { color: var(--running); background: var(--running-bg); }
+.off { color: var(--off); background: var(--off-bg); }
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+}
+.notice p { margin: 0; }
+
+.empty {
+  padding: 48px 24px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: center;
+}
+.empty h2 { margin-top: 0; }
+
+/* A job's or a run's details. */
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 10px 24px;
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; min-width: 0; }
+pre.command { margin: 0; white-space: pre-wrap; word-break: break-word; }
+code.block { display: block; }
+
+/* A run's output, dark in both themes, like a terminal. */
+.log {
+  max-height: 70vh;
+  overflow: auto;
+  padding: 12px 0;
+  border-radius: var(--radius);
+  background: #0c0a09;
+  color: #e7e5e4;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.log:empty { display: none; }
+.line { display: flex; gap: 16px; padding: 1px 16px; }
+.line .time { flex: none; color: #78716c; user-select: none; }
+.line .text { white-space: pre-wrap; word-break: break-word; }
+.line.err .text { color: #fca5a5; }
+.line.macron .text { color: #fcd34d; font-style: italic; }
+
+/* Forms. */
+.job-form label, .narrow form > label { display: block; margin: 18px 0 6px; font-weight: 600; }
+input, textarea, select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+textarea, #schedule { font-family: var(--mono); font-size: 0.9rem; }
+textarea { resize: vertical; }
+.hint { margin: 6px 0 0; color: var(--muted); font-size: 0.88rem; }
+.hint.invalid, .field-error { color: var(--bad); }
+.field-error { margin: 6px 0 0; font-size: 0.88rem; }
+.error-box {
+  padding: 12px 16px;
+  border: 1px solid var(--bad);
+  border-radius: var(--radius);
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+form label.check { display: flex; align-items: center; gap: 8px; margin: 18px 0 0; font-weight: 400; }
+form label.check input { width: auto; }
+details { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border); }
+summary { color: var(--accent); cursor: pointer; font-weight: 500; }
+.form-actions { display: flex; gap: 8px; margin-top: 24px; }
+
+.filters { display: flex; gap: 4px; }
+.filters a { padding: 4px 12px; border: 1px solid transparent; border-radius: 999px; color: var(--muted); }
+.filters a[aria-current] { border-color: var(--border); background: var(--surface); color: var(--text); }
+.message { font-size: 1.05rem; }
+
+@media (max-width: 640px) {
+  .bar { gap: 14px; padding: 10px 16px; }
+  main { padding: 16px; }
+  .facts { grid-template-columns: 1fr; gap: 2px; }
+  .facts dd { margin-bottom: 10px; }
+
+  /* On a phone, each job is a card rather than a squeezed table row. */
+  table.jobs thead { display: none; }
+  table.jobs tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+    padding: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.jobs tr:last-child { border-bottom: 0; }
+  table.jobs td { display: block; padding: 0; border: 0; }
+  table.jobs .cell-job, table.jobs .cell-schedule { grid-column: 1 / -1; }
+  table.jobs [data-label]::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  table.jobs .row-actions { align-self: center; }
+}

@@ -35,7 +35,7 @@ works* sections should stay true, and a change to either is a change to this fil
 | What launchd runs | Always `macron exec <job>`, never the job's command directly | One place captures output, records history, enforces timeouts and notifies. macron never has to parse `launchctl` output |
 | Run history | SQLite (`rusqlite`, bundled), WAL mode | Many writers (one `exec` per run) and readers (CLI, web) at once |
 | Run output | One JSON Lines file per run, each line tagged with its stream and time | Keeps stdout and stderr interleaved in order. The CLI, the web and agents all read the same file |
-| Web UI | `axum` serving server-rendered `askama` templates, `htmx` for interaction, assets embedded with `rust-embed` | No Node toolchain, so `cargo install` builds everything, and the binary is the whole product |
+| Web UI | `axum` serving server-rendered `askama` templates, one small hand-written script for what is live, assets embedded with `rust-embed` | No Node toolchain, so `cargo install` builds everything, and the binary is the whole product. The script is about 100 lines, so vendoring `htmx` would have added more than it saved |
 | Time | `jiff` | Correct next-run times across time zones and DST |
 | Packaging | One crate, `macron-cli`, with a library and a `macron` binary | `macron` is taken on crates.io. One crate keeps `cargo install` and publishing simple. Split only if a second consumer of the library appears |
 | launchd labels | `io.github.realzai.macron.<job>` | Reverse-DNS, and the prefix is how macron finds its own plists. It never touches a plist without it. The repo stays under `realzai`, so the prefix is permanent: changing it later would mean migrating every user's installed jobs |
@@ -187,7 +187,7 @@ error. Error codes are a contract and live in `src/error.rs`. Nothing prompts wi
 
 | Command | Does |
 |---|---|
-| `macron up [--port N] [--no-open]` | Starts the web UI and opens the browser. If one is already running, opens that instead |
+| `macron up [--port N] [--no-open] [--rotate-token]` | Starts the web UI and opens the browser. If one is already running, opens that instead |
 | `macron ls` | Jobs: schedule, its description, next run, last run status and time, enabled |
 | `macron show <job>` | One job in full, with its generated launchd schedule |
 | `macron add <job> --schedule <s> [options] -- <command…>` | Adds a job and installs it |
@@ -208,19 +208,24 @@ the job is loaded); its output format is undocumented and changes between releas
 
 ## Web UI: `macron up`
 
-`macron up` serves on `127.0.0.1` at a fixed default port, so a bookmark keeps working, and falls
-back to a free port if it is taken. It runs in the foreground until Ctrl-C. It writes
-`state/up.json` (pid, port); a second `macron up` that finds a live instance just opens it.
+`macron up` serves on `127.0.0.1:6220`, a fixed port so a bookmark keeps working, and falls back to a
+free port if it is taken (`--port` picks one, and fails if it is taken). It runs in the foreground
+until Ctrl-C. It writes `state/up.json` (pid, port); a second `macron up` that finds a live instance
+just opens it.
 
 | Page | Shows |
 |---|---|
-| `/` | Every job: schedule and description, next run, last run status, enabled toggle, Run now. Refreshes itself |
-| `/jobs/new`, `/jobs/<job>` | Create and edit forms with the schedule described as you type and inline errors; the job's run history |
-| `/jobs/<job>/runs/<id>` | One run's log. stderr is highlighted. While the run is live, new lines stream in over SSE |
-| `/runs` | Recent runs across all jobs, failures first if filtered |
+| `/` | Every job: schedule and its description, next run, last run, state, Run now. Refreshes itself every 5 seconds, and offers Apply when launchd is out of step with `jobs.toml` |
+| `/jobs/new`, `/jobs/<job>/edit` | The job form. The schedule is described as you type, and each error shows next to its field |
+| `/jobs/<job>` | A job in full, its actions (run now, edit, enable or disable, delete) and its last 50 runs |
+| `/jobs/<job>/delete` | Confirmation, with the choice to delete the job's runs too |
+| `/jobs/<job>/runs/<id>` | One run's output, stderr highlighted and terminal colour codes removed. While the run is live, new lines arrive over server-sent events, starting from where the page left off |
+| `/runs` | The last 100 runs across all jobs, filtered to failed, timed out or running |
 
-Handlers call the same library functions as the CLI. There is no logic in a handler that the CLI
-does not also have.
+Handlers call the same `Macron` operations as the CLI, on a blocking thread. There is no logic in a
+handler that the CLI does not also have. Every page works without JavaScript; `assets/app.js` only
+adds the refreshing list, the live output and the schedule preview. On a phone the jobs table
+becomes cards.
 
 **Security.** A page that can create jobs can run any command as you, so any website you visit
 must not be able to reach it:
@@ -229,11 +234,15 @@ must not be able to reach it:
 - Reject any request whose `Host` is not `127.0.0.1:<port>` or `localhost:<port>`. This stops DNS
   rebinding.
 - Require a session cookie. `macron up` opens `/auth?token=<secret>`, which sets an `HttpOnly`,
-  `SameSite=Strict` cookie and redirects. The secret lives in the state dir with mode 0600 and
-  `macron up --rotate-token` replaces it.
-- Reject a state-changing request whose `Origin` is not the server's own.
+  `SameSite=Strict` cookie for 30 days and redirects. The secret lives in `state/web-token` with mode
+  0600, and `macron up --rotate-token` replaces it, signing every browser out.
+- Reject a state-changing request unless it is a POST whose `Origin` is the server's own.
+  `SameSite` does not cover this alone: a page on another port of `127.0.0.1` is the same site.
+- Send a content security policy allowing only the UI's own scripts, styles and form targets, and
+  forbid framing, so another page cannot overlay the UI to trick clicks.
 
-These are tested, not just implemented.
+These are tested, not just implemented: in-process against the router (`src/web/tests.rs`) and end
+to end against `macron up` (`tests/web.rs`).
 
 ## Agent support
 
@@ -281,7 +290,7 @@ timeouts, trigger markers, `lost` detection, notifications, pruning; `run --wait
 `logs --follow`. *Done when* a failing job shows in `macron runs` with its exit status and its
 stderr in `macron logs`.
 
-**M3. Web UI.** `macron up` with the security rules; the pages above; live log streaming; create,
+**M3. Web UI (done).** `macron up` with the security rules; the pages above; live log streaming; create,
 edit, enable, disable, delete and run now. *Done when* everything from M1 and M2 can be done in the
 browser.
 

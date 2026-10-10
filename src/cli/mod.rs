@@ -11,12 +11,11 @@ use std::process::ExitCode;
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
 
-use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::exec;
-use crate::launchd::Launchctl;
 use crate::notify::Notifier;
-use crate::paths::Paths;
+use crate::ops::Macron;
+use crate::web;
 
 /// Exit status for a command line that does not parse. It is clap's own, so it is the same with or
 /// without `--json`.
@@ -87,6 +86,18 @@ enum Command {
     Runs(runs::RunsArgs),
     /// Print a run's output
     Logs(runs::LogsArgs),
+    /// Open the web interface, serving it on 127.0.0.1 until Ctrl-C
+    Up {
+        /// The port to serve on [default: 6220, or any free port if that is taken]
+        #[arg(long)]
+        port: Option<u16>,
+        /// Print the link instead of opening a browser
+        #[arg(long)]
+        no_open: bool,
+        /// Replace the sign-in secret, signing out every browser
+        #[arg(long)]
+        rotate_token: bool,
+    },
     /// Make launchd match jobs.toml, after editing it by hand
     Apply {
         /// Show what would change without changing it
@@ -106,14 +117,7 @@ enum Command {
 /// What every command needs.
 struct Context {
     json: bool,
-    paths: Paths,
-    launchctl: Launchctl,
-}
-
-impl Context {
-    fn config(&self) -> Result<Config> {
-        Config::load(&self.paths.jobs_file)
-    }
+    macron: Macron,
 }
 
 pub fn run() -> ExitCode {
@@ -134,8 +138,7 @@ pub fn run() -> ExitCode {
 fn execute(command: Command, json: bool) -> Result<ExitCode> {
     let ctx = Context {
         json,
-        paths: Paths::from_env()?,
-        launchctl: Launchctl::from_env(),
+        macron: Macron::from_env()?,
     };
     match command {
         Command::Ls => jobs::list(&ctx)?,
@@ -148,6 +151,18 @@ fn execute(command: Command, json: bool) -> Result<ExitCode> {
         Command::Run { job, wait } => return runs::run(&ctx, &job, wait),
         Command::Runs(args) => runs::list(&ctx, args)?,
         Command::Logs(args) => runs::logs(&ctx, args)?,
+        Command::Up {
+            port,
+            no_open,
+            rotate_token,
+        } => web::up(
+            ctx.macron,
+            web::Options {
+                port,
+                open: !no_open,
+                rotate_token,
+            },
+        )?,
         Command::Apply { dry_run } => jobs::apply(&ctx, dry_run)?,
         Command::Paths => paths(&ctx)?,
         Command::Exec { job } => return exec(&ctx, &job),
@@ -156,7 +171,7 @@ fn execute(command: Command, json: bool) -> Result<ExitCode> {
 }
 
 fn paths(ctx: &Context) -> Result<()> {
-    let paths = &ctx.paths;
+    let paths = ctx.macron.paths();
     if ctx.json {
         return output::json(paths);
     }
@@ -176,10 +191,11 @@ fn paths(ctx: &Context) -> Result<()> {
 
 /// Runs the job, recording it, and exits as it did.
 fn exec(ctx: &Context, name: &str) -> Result<ExitCode> {
-    let config = ctx.config()?;
+    let config = ctx.macron.config()?;
     let job = config.job(name)?;
-    let trigger = exec::take_trigger(&ctx.paths, name);
-    let outcome = exec::run(job, trigger, &ctx.paths, &Notifier::from_env())?;
+    let paths = ctx.macron.paths();
+    let trigger = exec::take_trigger(paths, name);
+    let outcome = exec::run(job, trigger, paths, &Notifier::from_env())?;
     if let (exec::Outcome::TimedOut, Some(timeout)) = (outcome, job.timeout()) {
         eprintln!("macron: stopped `{name}` when it reached its timeout of {timeout}");
     }

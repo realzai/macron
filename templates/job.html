@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} · macron{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ name }}</h1>
+    {% if let Some(description) = description %}<p class="muted">{{ description }}</p>{% endif %}
+  </div>
+  <div class="actions">
+    {% if can_run %}
+    <form method="post" action="/jobs/{{ name }}/run"><button class="button primary">Run now</button></form>
+    {% endif %}
+    <a class="button" href="/jobs/{{ name }}/edit">Edit</a>
+    {% if enabled %}
+    <form method="post" action="/jobs/{{ name }}/disable"><button class="button">Disable</button></form>
+    {% else %}
+    <form method="post" action="/jobs/{{ name }}/enable"><button class="button">Enable</button></form>
+    {% endif %}
+    <a class="button danger" href="/jobs/{{ name }}/delete">Delete</a>
+  </div>
+</div>
+<dl class="facts">
+  <dt>Schedule</dt>
+  <dd><code>{{ schedule }}</code> <span class="muted">{{ when }}</span></dd>
+  <dt>Next runs</dt>
+  <dd>{{ next_runs }}</dd>
+  <dt>State</dt>
+  <dd><span class="state {{ state_class }}">{{ state }}</span></dd>
+  <dt>Command</dt>
+  <dd><pre class="command">{{ command }}</pre></dd>
+  <dt>Working directory</dt>
+  <dd><code>{{ workdir }}</code></dd>
+  <dt>Shell</dt>
+  <dd><code>{{ shell }}</code></dd>
+  <dt>Environment</dt>
+  <dd>
+    {% if env.is_empty() %}<span class="muted">none</span>{% endif %}
+    {% for variable in env %}<code class="block">{{ variable }}</code>{% endfor %}
+  </dd>
+  <dt>Timeout</dt>
+  <dd>{{ timeout }}</dd>
+  <dt>Notify</dt>
+  <dd>{{ notify }}</dd>
+  <dt>Runs kept</dt>
+  <dd>{{ keep_runs }}</dd>
+</dl>
+<h2>Runs</h2>
+{{ runs|safe }}
+{% endblock %}

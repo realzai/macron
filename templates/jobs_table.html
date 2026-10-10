@@ -1,0 +1,47 @@
+{% if !in_sync %}
+<div class="notice">
+  <p>launchd does not match <code>jobs.toml</code>. It was probably edited by hand.</p>
+  <form method="post" action="/apply"><button class="button">Apply it</button></form>
+</div>
+{% endif %}
+{% if rows.is_empty() %}
+<div class="empty">
+  <h2>No jobs yet</h2>
+  <p>Add one here, with <code>macron add</code>, or by writing it into <code>{{ jobs_file }}</code>.</p>
+  <a class="button primary" href="/jobs/new">New job</a>
+</div>
+{% else %}
+<div class="table-wrap">
+  <table class="jobs">
+    <thead>
+      <tr><th>Job</th><th>Schedule</th><th>Next run</th><th>Last run</th><th>State</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="cell-job">
+          <a class="name" href="/jobs/{{ row.name }}">{{ row.name }}</a>
+          {% if let Some(description) = row.description %}<div class="muted">{{ description }}</div>{% endif %}
+        </td>
+        <td class="cell-schedule"><code>{{ row.schedule }}</code><div class="muted">{{ row.when }}</div></td>
+        <td class="cell-next nowrap" data-label="Next run">{{ row.next_run }}</td>
+        <td class="cell-last nowrap" data-label="Last run">
+          {% if let Some(run) = row.last_run %}
+          <a class="badge {{ run.class }}" href="{{ run.url }}">{{ run.status }}</a>
+          <div class="muted">{{ run.ago }}</div>
+          {% else %}
+          <span class="muted">never</span>
+          {% endif %}
+        </td>
+        <td><span class="state {{ row.state_class }}">{{ row.state }}</span></td>
+        <td class="row-actions">
+          {% if row.can_run %}
+          <form method="post" action="/jobs/{{ row.name }}/run"><button class="button small">Run now</button></form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}

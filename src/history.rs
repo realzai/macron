@@ -339,6 +339,16 @@ impl History {
         Ok(ids)
     }
 
+    /// How many runs of the job are recorded.
+    pub fn count(&self, job: &str) -> Result<usize> {
+        let count: i64 =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM runs WHERE job = ?1", [job], |row| {
+                    row.get(0)
+                })?;
+        Ok(usize::try_from(count).unwrap_or(0))
+    }
+
     /// Deletes a run as if it never happened, for one that will not be recorded after all.
     pub fn discard(&self, id: i64) -> Result<()> {
         self.conn.execute("DELETE FROM runs WHERE id = ?1", [id])?;
@@ -369,7 +379,7 @@ impl History {
         let booted_at = booted_at();
         for (id, pid, started_at) in running {
             let before_boot = booted_at.is_some_and(|booted_at| started_at < booted_at);
-            if before_boot || !is_alive(pid) {
+            if before_boot || !process_exists(pid) {
                 self.conn.execute(
                     "UPDATE runs SET status = 'lost', error = ?2 WHERE id = ?1 AND status = 'running'",
                     params![id, LOST],
@@ -419,7 +429,7 @@ fn booted_at() -> Option<i64> {
 }
 
 /// Whether a process with this id exists. One owned by another user counts.
-fn is_alive(pid: u32) -> bool {
+pub(crate) fn process_exists(pid: u32) -> bool {
     let Ok(pid) = i32::try_from(pid) else {
         return false;
     };

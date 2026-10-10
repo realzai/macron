@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ job }} run {{ id }} · macron{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="crumbs"><a href="/jobs/{{ job }}">{{ job }}</a> / run</p>
+    <h1>#{{ id }} <span class="badge {{ class }}">{{ status }}</span></h1>
+  </div>
+</div>
+<dl class="facts">
+  <dt>Started</dt>
+  <dd>{{ started }} <span class="muted">{{ trigger }}</span></dd>
+  <dt>Took</dt>
+  <dd>{{ took }}</dd>
+  <dt>Outcome</dt>
+  <dd data-summary>{{ summary }}</dd>
+  <dt>Command</dt>
+  <dd><pre class="command">{{ command }}</pre></dd>
+</dl>
+<h2>Output</h2>
+<div class="log" id="log"{% if running %} data-events="{{ events }}"{% endif %}>
+  {%- for line in lines -%}
+  <div class="line {{ line.stream }}"><span class="time">{{ line.time }}</span><span class="text">{{ line.text }}</span></div>
+  {%- endfor -%}
+</div>
+{% if lines.is_empty() && !running %}<p class="muted">It printed nothing.</p>{% endif %}
+{% endblock %}

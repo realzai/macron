@@ -92,6 +92,18 @@ pub enum Error {
     )]
     HistoryTooNew { version: usize, supported: usize },
 
+    #[error("there is nothing at this address")]
+    NotFound,
+
+    #[error("port {0} is in use; choose another with --port, or leave it out to use any free port")]
+    PortInUse(u16),
+
+    #[error("macron is already up on port {port}; stop it before replacing the sign-in token")]
+    AlreadyUp { port: u16 },
+
+    #[error("{0}")]
+    Internal(String),
+
     #[error("cannot encode output as JSON: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -121,7 +133,10 @@ impl Error {
             Error::InvalidLog { .. } => "invalid_log",
             Error::Database(_) => "database",
             Error::HistoryTooNew { .. } => "history_too_new",
-            Error::Json(_) => "internal",
+            Error::NotFound => "not_found",
+            Error::PortInUse(_) => "port_in_use",
+            Error::AlreadyUp { .. } => "already_up",
+            Error::Internal(_) | Error::Json(_) => "internal",
         }
     }
 

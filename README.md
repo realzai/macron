@@ -4,12 +4,15 @@ Schedule, run and watch local jobs on macOS.
 
 macron is cron for a Mac that sleeps. You describe your jobs once; macron installs them into
 launchd, which runs them on schedule, including runs missed while the Mac was asleep. Every run is
-recorded with its output, so you can see what happened. Every command speaks JSON, so scripts and
-agents can drive it as easily as you can.
+recorded with its output, so you can see what happened. Manage it all from the command line, or type
+`macron up` and use the browser. Every command speaks JSON, so scripts and agents can drive it as
+easily as you can.
 
-> **Status: early development.** Jobs, run history and logs work from the command line today. The
-> `macron up` web interface is next. The plan, including what is being built and in what order, is
-> in [`docs/plan.md`](docs/plan.md).
+![The jobs page of macron's web interface, listing four jobs with their schedules, next runs, last runs and state](docs/images/jobs.png)
+
+> **Status: early development.** Jobs, run history, logs and the web interface work today. An agent
+> skill, full reference docs and packaged releases are next; the plan is in
+> [`docs/plan.md`](docs/plan.md).
 
 ## Why not cron?
 
@@ -27,6 +30,21 @@ cargo install --git https://github.com/realzai/macron
 ```
 
 ## Use
+
+### In the browser
+
+```sh
+macron up
+```
+
+This opens macron in your browser, signed in. Add and edit jobs (the schedule is described as you
+type it), run one now and watch its output arrive, and look back through every run. Press Ctrl-C to
+stop it. The page is served on `127.0.0.1` only, and only to the browser `macron up` signed in, so
+other websites cannot reach it.
+
+![A run's page: its status, timing, command and output, with the error line in red](docs/images/run.png)
+
+### On the command line
 
 ```sh
 # Add a job: a name, a schedule, and the command after --.
@@ -63,12 +81,15 @@ Each run's output is kept, up to 10 MiB, along with when it ran, how long it too
 The newest 100 runs of each job are kept; set `keep_runs` to change that. By default macOS posts a
 notification when a run fails; set `notify` to `always` or `never` to change that.
 
+### Schedules and `jobs.toml`
+
 Schedules are five-field cron (`minute hour day-of-month month day-of-week`, with names such as
 `MON` and `JAN`), a shorthand (`@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`), or
 `@every <duration>`.
 
 Jobs are kept in `~/.config/macron/jobs.toml`, which you can edit by hand. Run `macron apply`
-afterwards to bring launchd in line with it; edits from the CLI keep your comments and formatting.
+afterwards to bring launchd in line with it. Changes made from the CLI or the browser keep your
+comments and formatting.
 
 ```toml
 [jobs.backup]

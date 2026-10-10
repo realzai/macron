@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Runs · macron{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Runs</h1>
+  <nav class="filters">
+    {% for filter in filters %}<a href="{{ filter.url }}"{% if filter.current %} aria-current="page"{% endif %}>{{ filter.label }}</a>{% endfor %}
+  </nav>
+</div>
+{{ table|safe }}
+{% endblock %}

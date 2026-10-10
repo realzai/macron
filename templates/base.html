@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}macron{% endblock %}</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="/">macron</a>
+    <nav>
+      <a href="/"{% if section == "jobs" %} aria-current="page"{% endif %}>Jobs</a>
+      <a href="/runs"{% if section == "runs" %} aria-current="page"{% endif %}>Runs</a>
+    </nav>
+    <a class="button primary" href="/jobs/new">New job</a>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
