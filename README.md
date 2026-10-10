@@ -10,9 +10,8 @@ easily as you can.
 
 ![The jobs page of macron's web interface, listing four jobs with their schedules, next runs, last runs and state](docs/images/jobs.png)
 
-> **Status: early development.** Jobs, run history, logs and the web interface work today. An agent
-> skill, full reference docs and packaged releases are next; the plan is in
-> [`docs/plan.md`](docs/plan.md).
+> **Status: early development.** Jobs, run history, logs, the web interface and the agent skill
+> work today. Packaged releases are next; the plan is in [`docs/plan.md`](docs/plan.md).
 
 ## Why not cron?
 
@@ -102,12 +101,44 @@ notify = "always"
 ```
 
 Each command runs in a login shell (`/bin/zsh -lc` by default), so your `PATH`, Homebrew's
-included, is set up as in a terminal. Add `--json` to any command for machine-readable output.
+included, is set up as in a terminal. A login shell that is not interactive reads `~/.zprofile`
+but not `~/.zshrc`, so set `PATH` in `~/.zprofile`.
+
+### When something goes wrong
+
+```sh
+macron doctor
+```
+
+`doctor` checks everything that can stop a job running without a sound: `jobs.toml`, launchd, each
+job's shell and working directory, the macron binary installed jobs run, the run history, and
+recent errors macron could not record. For each problem it says how to fix it.
+
+## For agents and scripts
+
+Every command takes `--json`, prints one JSON document, and reports errors as JSON with a stable
+`code`. [`docs/json.md`](docs/json.md) describes all of it, and [`docs/cli.md`](docs/cli.md) every
+command and option.
+
+The [macron skill](skills/macron/SKILL.md) teaches an agent to add, change, run and remove jobs,
+and to work out why one failed. Install it for Claude Code, Codex, Cursor and other agents with:
+
+```sh
+npx skills add realzai/macron
+```
 
 ## Good to know
 
 - **Sleep and power-off.** launchd runs a job missed while the Mac slept, once, when it wakes. A job
   missed while the Mac was off is not run.
+- **Full Disk Access.** A job that reads `~/Documents`, `~/Desktop`, `~/Downloads` or another
+  app's data needs Full Disk Access granted to `macron`, in System Settings under Privacy &
+  Security. A rebuilt or upgraded `macron` can need it granted again; `macron doctor` says which
+  binary to add.
+- **Moving or upgrading macron.** Installed jobs run the `macron` that installed them. If it moves,
+  `macron doctor` says so and `macron apply` points them at the new one.
+- **Daylight saving.** On the nights the clocks change, a job scheduled inside the skipped or
+  repeated hour runs when launchd decides, which can differ from the predicted next run.
 - **Schedule changes need launchd to hear about them; command changes do not.** `macron add`,
   `edit`, `enable` and `disable` update launchd themselves. After editing `jobs.toml` by hand, run
   `macron apply`. A job's command is read when it runs, so a changed command takes effect on the

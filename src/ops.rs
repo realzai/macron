@@ -91,6 +91,11 @@ impl Macron {
         &self.paths
     }
 
+    /// The macron that installed jobs run: this binary.
+    pub fn binary(&self) -> &std::path::Path {
+        &self.binary
+    }
+
     pub fn config(&self) -> Result<Config> {
         Config::load(&self.paths.jobs_file)
     }

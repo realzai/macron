@@ -1,7 +1,7 @@
 # AGENTS.md
 
 For anyone, human or agent, working **on** macron. An agent that wants to **use** macron to
-schedule jobs wants `skills/macron/SKILL.md` instead, once it exists (milestone M4).
+schedule jobs wants [`skills/macron/SKILL.md`](skills/macron/SKILL.md) instead.
 
 Read [`docs/plan.md`](docs/plan.md) before changing anything. It holds the decisions, how the
 pieces fit, and which milestone is next. If a change contradicts the plan, change the plan in the
@@ -15,6 +15,7 @@ cargo test
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
 cargo run -- paths            # run the binary; arguments go after --
+MACRON_UPDATE_DOCS=1 cargo test --lib cli_reference   # regenerate docs/cli.md
 ```
 
 CI runs `fmt --check`, `clippy -D warnings` and `test` on macOS. Run all three before calling a
@@ -43,9 +44,13 @@ change done.
 | `src/time.rs` | Times as macron writes them for machines |
 | `src/duration.rs` | Durations as people write them (`15m`, `1h 30m`) |
 | `src/error.rs` | Every error and its stable code |
+| `src/doctor.rs` | `macron doctor`'s checks |
 | `src/paths.rs` | Where config, state and plists live, and the environment overrides |
 | `tests/` | The built binary end to end, against a sandbox with stand-ins for `launchctl` and `osascript` (`tests/support/`) |
 | `docs/plan.md` | The plan |
+| `docs/cli.md` | The command-line reference, generated from `src/cli` |
+| `docs/json.md` | What every command prints with `--json`, and every error code |
+| `skills/macron/` | The skill that teaches agents to use macron |
 
 ## Rules
 
@@ -55,7 +60,10 @@ change done.
 - **Every command supports `--json`.** One JSON document on stdout. Errors on stderr as
   `{"error":{"code":"…","message":"…"}}`. Exit 0 for success, 1 for an error, 2 for a usage error.
 - **Error codes are a contract.** Agents match on `Error::code`. Never change what a released code
-  means; add a new variant.
+  means; add a new variant, and document it in `docs/json.md`. `tests/docs.rs` fails until you do.
+- **The docs follow the code.** A change to a command or its options regenerates `docs/cli.md`; a
+  change to what a command prints updates `docs/json.md` and, if an agent would act on it, the
+  skill. `src/cli/reference.rs` and `tests/docs.rs` catch the mechanical part.
 - **Never prompt without a terminal.** A destructive command asks on a TTY and otherwise requires
   `--yes`.
 - **Tests never touch the real machine.** Set `MACRON_CONFIG_DIR`, `MACRON_STATE_DIR` and
