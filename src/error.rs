@@ -58,6 +58,15 @@ pub enum Error {
     #[error("{0} needs --yes when there is no terminal to confirm on")]
     ConfirmationRequired(String),
 
+    #[error("run history: {0}")]
+    Database(#[from] rusqlite::Error),
+
+    #[error(
+        "the run history was written by a newer macron (schema {version}; this one reads up to \
+         {supported}); upgrade macron"
+    )]
+    HistoryTooNew { version: usize, supported: usize },
+
     #[error("cannot encode output as JSON: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -78,6 +87,8 @@ impl Error {
             Error::Launchctl { .. } => "launchctl",
             Error::Spawn { .. } => "spawn_failed",
             Error::ConfirmationRequired(_) => "confirmation_required",
+            Error::Database(_) => "database",
+            Error::HistoryTooNew { .. } => "history_too_new",
             Error::Json(_) => "internal",
         }
     }
