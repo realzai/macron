@@ -11,12 +11,10 @@ use std::process::ExitCode;
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
 
-use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::exec;
-use crate::launchd::Launchctl;
 use crate::notify::Notifier;
-use crate::paths::Paths;
+use crate::ops::Macron;
 
 /// Exit status for a command line that does not parse. It is clap's own, so it is the same with or
 /// without `--json`.
@@ -106,14 +104,7 @@ enum Command {
 /// What every command needs.
 struct Context {
     json: bool,
-    paths: Paths,
-    launchctl: Launchctl,
-}
-
-impl Context {
-    fn config(&self) -> Result<Config> {
-        Config::load(&self.paths.jobs_file)
-    }
+    macron: Macron,
 }
 
 pub fn run() -> ExitCode {
@@ -134,8 +125,7 @@ pub fn run() -> ExitCode {
 fn execute(command: Command, json: bool) -> Result<ExitCode> {
     let ctx = Context {
         json,
-        paths: Paths::from_env()?,
-        launchctl: Launchctl::from_env(),
+        macron: Macron::from_env()?,
     };
     match command {
         Command::Ls => jobs::list(&ctx)?,
@@ -156,7 +146,7 @@ fn execute(command: Command, json: bool) -> Result<ExitCode> {
 }
 
 fn paths(ctx: &Context) -> Result<()> {
-    let paths = &ctx.paths;
+    let paths = ctx.macron.paths();
     if ctx.json {
         return output::json(paths);
     }
@@ -176,10 +166,11 @@ fn paths(ctx: &Context) -> Result<()> {
 
 /// Runs the job, recording it, and exits as it did.
 fn exec(ctx: &Context, name: &str) -> Result<ExitCode> {
-    let config = ctx.config()?;
+    let config = ctx.macron.config()?;
     let job = config.job(name)?;
-    let trigger = exec::take_trigger(&ctx.paths, name);
-    let outcome = exec::run(job, trigger, &ctx.paths, &Notifier::from_env())?;
+    let paths = ctx.macron.paths();
+    let trigger = exec::take_trigger(paths, name);
+    let outcome = exec::run(job, trigger, paths, &Notifier::from_env())?;
     if let (exec::Outcome::TimedOut, Some(timeout)) = (outcome, job.timeout()) {
         eprintln!("macron: stopped `{name}` when it reached its timeout of {timeout}");
     }

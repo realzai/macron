@@ -26,6 +26,7 @@ change done.
 |---|---|
 | `src/main.rs` | Calls `cli::run`. Nothing else goes here |
 | `src/lib.rs` | The library. The CLI and the web UI are both clients of it |
+| `src/ops.rs` | Every operation macron offers, through `Macron`. The CLI and the web UI both call it |
 | `src/cli/` | Argument parsing and rendering only. No logic a web handler would also need |
 | `src/schedule/` | Parsing schedules, converting them for launchd, describing them, predicting runs |
 | `src/job.rs` | A job and its validation |
@@ -44,8 +45,9 @@ change done.
 
 ## Rules
 
-- **One code path for the CLI and the web.** Logic lives in the library. A CLI command and a web
-  handler that do the same thing call the same function.
+- **One code path for the CLI and the web.** Logic lives in the library, and operations in
+  `Macron` (`src/ops.rs`). A CLI command and a web handler that do the same thing call the same
+  method.
 - **Every command supports `--json`.** One JSON document on stdout. Errors on stderr as
   `{"error":{"code":"…","message":"…"}}`. Exit 0 for success, 1 for an error, 2 for a usage error.
 - **Error codes are a contract.** Agents match on `Error::code`. Never change what a released code

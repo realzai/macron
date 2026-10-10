@@ -32,6 +32,17 @@ pub(crate) fn serialize_option<S: serde::Serializer>(
     }
 }
 
+/// Serializes an optional zoned time as [`rfc3339`] in its own time zone, or `null`.
+pub(crate) fn serialize_zoned_option<S: serde::Serializer>(
+    time: &Option<Zoned>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match time {
+        Some(time) => serializer.serialize_str(&rfc3339(time)),
+        None => serializer.serialize_none(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

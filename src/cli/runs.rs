@@ -1,9 +1,8 @@
 //! The commands about runs: `run`, `runs` and `logs`.
 
-use std::path::Path;
 use std::process::ExitCode;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use clap::Args;
 use jiff::{Timestamp, Zoned};
@@ -11,15 +10,10 @@ use serde::Serialize;
 
 use super::Context;
 use super::output::{self, Paint, human_time, run_status, signal_name, took};
-use crate::error::{Error, Result};
-use crate::exec;
-use crate::history::{Filter, History, Run, Status, Trigger};
-use crate::launchd;
+use crate::error::Result;
+use crate::history::{Filter, Run, Status, Trigger};
 use crate::runlog::{self, Line, Stream};
 use crate::time;
-
-/// How long `run` waits for launchd to start the job.
-const START_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How often a run being followed is checked for new output.
 const FOLLOW_POLL: Duration = Duration::from_millis(200);
@@ -88,41 +82,7 @@ impl<'a> From<&'a Line> for LineView<'a> {
 }
 
 pub fn run(ctx: &Context, name: &str, wait: bool) -> Result<ExitCode> {
-    let config = ctx.config()?;
-    let job = config.job(name)?;
-    if !job.enabled() {
-        return Err(Error::JobDisabled(name.to_owned()));
-    }
-    let label = launchd::label(name);
-    if !ctx.launchctl.is_loaded(&label)? {
-        return Err(Error::NotLoaded(name.to_owned()));
-    }
-    let history = History::open(&ctx.paths.history_db)?;
-    if let Some(running) = history.running(name)? {
-        return Err(Error::AlreadyRunning {
-            job: name.to_owned(),
-            run: running.id,
-        });
-    }
-
-    let asked_at = Timestamp::now();
-    exec::request_manual_run(&ctx.paths, name)?;
-    if let Err(err) = ctx.launchctl.start(&label) {
-        exec::cancel_manual_run(&ctx.paths, name);
-        return Err(err);
-    }
-    let run = match wait_for_start(&history, name, asked_at)? {
-        Some(run) => run,
-        None => {
-            exec::cancel_manual_run(&ctx.paths, name);
-            return Err(Error::DidNotStart {
-                job: name.to_owned(),
-                seconds: START_TIMEOUT.as_secs(),
-                log: launchd::launchd_log(&ctx.paths, name),
-            });
-        }
-    };
-
+    let run = ctx.macron.start_run(name)?;
     if !wait {
         if ctx.json {
             output::json(&run)?;
@@ -139,7 +99,7 @@ pub fn run(ctx: &Context, name: &str, wait: bool) -> Result<ExitCode> {
         println!("Started {name} as run {}.", run.id);
         Printer::Human(Paint::stdout())
     };
-    let finished = follow(&history, &run, &log_path(ctx, &run), &printer)?;
+    let finished = follow(ctx, run, &printer)?;
     if ctx.json {
         output::json(&finished)?;
     } else {
@@ -148,23 +108,8 @@ pub fn run(ctx: &Context, name: &str, wait: bool) -> Result<ExitCode> {
     Ok(ExitCode::from(finished.exit_status()))
 }
 
-/// Waits for the run launchd was just asked to start to show up in the history.
-fn wait_for_start(history: &History, job: &str, since: Timestamp) -> Result<Option<Run>> {
-    let deadline = Instant::now() + START_TIMEOUT;
-    loop {
-        if let Some(run) = history.first_run_since(job, Trigger::Manual, since)? {
-            return Ok(Some(run));
-        }
-        if Instant::now() >= deadline {
-            return Ok(None);
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
-}
-
 pub fn list(ctx: &Context, args: RunsArgs) -> Result<()> {
-    let history = History::open(&ctx.paths.history_db)?;
-    let runs = history.runs(Filter {
+    let runs = ctx.macron.history()?.runs(Filter {
         job: args.job.as_deref(),
         status: args.status,
         limit: args.limit,
@@ -214,9 +159,7 @@ pub fn list(ctx: &Context, args: RunsArgs) -> Result<()> {
 }
 
 pub fn logs(ctx: &Context, args: LogsArgs) -> Result<()> {
-    let history = History::open(&ctx.paths.history_db)?;
-    let run = find_run(ctx, &history, &args.job, args.run)?;
-    let path = log_path(ctx, &run);
+    let run = ctx.macron.find_run(&args.job, args.run)?;
 
     if ctx.json && !args.follow {
         #[derive(Serialize)]
@@ -224,7 +167,7 @@ pub fn logs(ctx: &Context, args: LogsArgs) -> Result<()> {
             run: &'a Run,
             lines: Vec<LineView<'a>>,
         }
-        let (lines, _) = runlog::read(&path, 0)?;
+        let (lines, _) = runlog::read(&log_path(ctx, &run), 0)?;
         return output::json(&Log {
             run: &run,
             lines: lines.iter().map(LineView::from).collect(),
@@ -241,10 +184,10 @@ pub fn logs(ctx: &Context, args: LogsArgs) -> Result<()> {
         println!("{}", header(&run));
     }
     let (ended, printed) = if args.follow {
-        let ended = follow(&history, &run, &path, &printer)?;
+        let ended = follow(ctx, run, &printer)?;
         (ended, None)
     } else {
-        let (lines, _) = runlog::read(&path, 0)?;
+        let (lines, _) = runlog::read(&log_path(ctx, &run), 0)?;
         for line in &lines {
             printer.print(line)?;
         }
@@ -272,58 +215,22 @@ pub fn logs(ctx: &Context, args: LogsArgs) -> Result<()> {
     Ok(())
 }
 
-/// The run `id` of `job`, or its latest run.
-fn find_run(ctx: &Context, history: &History, job: &str, id: Option<i64>) -> Result<Run> {
-    if let Some(id) = id {
-        return history
-            .run(id)?
-            .filter(|run| run.job == job)
-            .ok_or_else(|| Error::NoSuchRun {
-                job: job.to_owned(),
-                run: id,
-            });
-    }
-    let filter = Filter {
-        job: Some(job),
-        status: None,
-        limit: 1,
-    };
-    match history.runs(filter)?.into_iter().next() {
-        Some(run) => Ok(run),
-        None => {
-            // A job that never ran and one that does not exist call for different errors.
-            ctx.config()?.job(job)?;
-            Err(Error::NoRuns(job.to_owned()))
-        }
-    }
-}
-
 fn log_path(ctx: &Context, run: &Run) -> std::path::PathBuf {
-    runlog::path(&ctx.paths, &run.job, run.id)
+    runlog::path(ctx.macron.paths(), &run.job, run.id)
 }
 
 /// Prints the run's log from the start, then each new line as it arrives, until the run ends.
 /// Returns the run as it ended.
-fn follow(history: &History, run: &Run, path: &Path, printer: &Printer) -> Result<Run> {
-    let mut offset = 0;
+fn follow(ctx: &Context, run: Run, printer: &Printer) -> Result<Run> {
+    let history = ctx.macron.history()?;
+    let mut follower = ctx.macron.follow(run);
     loop {
-        let (lines, next) = runlog::read(path, offset)?;
-        offset = next;
+        let (lines, ended) = follower.poll(&history)?;
         for line in &lines {
             printer.print(line)?;
         }
-        history.mark_lost()?;
-        let current = history.run(run.id)?.ok_or_else(|| Error::NoSuchRun {
-            job: run.job.clone(),
-            run: run.id,
-        })?;
-        if current.status != Status::Running {
-            // Every line is written before the run is marked finished, so this read gets the rest.
-            let (lines, _) = runlog::read(path, offset)?;
-            for line in &lines {
-                printer.print(line)?;
-            }
-            return Ok(current);
+        if let Some(run) = ended {
+            return Ok(run);
         }
         thread::sleep(FOLLOW_POLL);
     }

@@ -12,6 +12,7 @@ pub mod history;
 pub mod job;
 pub mod launchd;
 pub mod notify;
+pub mod ops;
 pub mod paths;
 pub mod runlog;
 pub mod schedule;

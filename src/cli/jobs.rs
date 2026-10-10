@@ -1,12 +1,7 @@
 //! The commands that manage jobs: `ls`, `show`, `add`, `edit`, `rm`, `enable`, `disable` and
-//! `apply`.
-//!
-//! Every change goes the same way: edit `jobs.toml` under its lock, save it, then make launchd match
-//! the saved file. A failure after the save leaves the file changed and launchd behind, which
-//! `macron apply` finishes.
+//! `apply`. Each parses its arguments, calls [`Macron`](crate::ops::Macron), and prints what comes
+//! back.
 
-use std::collections::BTreeMap;
-use std::fs;
 use std::io::{self, BufRead, IsTerminal, Write};
 
 use clap::{Args, ValueEnum};
@@ -15,12 +10,12 @@ use serde::Serialize;
 
 use super::Context;
 use super::output::{self, ago, human_time, run_status, tilde, took};
-use crate::config::{Config, ConfigEditor};
 use crate::error::{Error, Result};
-use crate::history::{History, Run};
-use crate::job::{Job, JobSpec, Notify};
-use crate::launchd::{self, Action, Change, State};
-use crate::{runlog, time};
+use crate::history::Run;
+use crate::job::{JobSpec, Notify};
+use crate::launchd::{self, Action, Change};
+use crate::ops::{Changed, next_runs};
+use crate::time;
 
 /// How many upcoming runs `show` lists in JSON. People get the first three.
 const NEXT_RUNS: usize = 5;
@@ -190,32 +185,6 @@ fn shell_quote(arg: &str) -> String {
     }
 }
 
-/// A job in JSON, with where it stands, when it runs next and how it last ran.
-#[derive(Serialize)]
-struct JobView<'a> {
-    #[serde(flatten)]
-    job: &'a Job,
-    state: State,
-    next_run: Option<String>,
-    last_run: Option<&'a Run>,
-}
-
-impl<'a> JobView<'a> {
-    fn new(job: &'a Job, state: State, last_run: Option<&'a Run>, now: &Zoned) -> Self {
-        Self {
-            job,
-            state,
-            next_run: next_runs(job, now).next().as_ref().map(time::rfc3339),
-            last_run,
-        }
-    }
-}
-
-/// The latest run of each job, by name.
-fn last_runs(ctx: &Context) -> Result<BTreeMap<String, Run>> {
-    History::open(&ctx.paths.history_db)?.last_runs()
-}
-
 /// "succeeded 5m ago", for a table cell.
 fn last_run_cell(run: Option<&Run>, now: &Zoned) -> String {
     run.map_or_else(
@@ -230,68 +199,32 @@ fn last_run_cell(run: Option<&Run>, now: &Zoned) -> String {
     )
 }
 
-/// The job's upcoming runs: none while it is disabled, and none for `@every`, which launchd counts
-/// from when it loaded the job.
-fn next_runs(job: &Job, now: &Zoned) -> impl Iterator<Item = Zoned> {
-    let first = job
-        .enabled()
-        .then(|| job.schedule().next_after(now))
-        .flatten();
-    std::iter::successors(first, |previous| job.schedule().next_after(previous))
-}
-
-fn plan(ctx: &Context, config: &Config) -> Result<Vec<Change>> {
-    let binary = launchd::current_binary()?;
-    launchd::plan(config, &binary, &ctx.paths, &ctx.launchctl)
-}
-
-/// Makes launchd match `config`, returning what changed.
-fn reconcile(ctx: &Context, config: &Config) -> Result<Vec<Change>> {
-    let changes = plan(ctx, config)?;
-    launchd::apply(&changes, &ctx.paths, &ctx.launchctl)?;
-    Ok(changes)
-}
-
 pub fn list(ctx: &Context) -> Result<()> {
-    let config = ctx.config()?;
-    let changes = plan(ctx, &config)?;
-    let last_runs = last_runs(ctx)?;
     let now = Zoned::now();
-    let views: Vec<JobView> = config
-        .jobs()
-        .map(|job| {
-            let state = launchd::state(job, &changes);
-            JobView::new(job, state, last_runs.get(job.name()), &now)
-        })
-        .collect();
-    let in_sync = changes.is_empty();
+    let overview = ctx.macron.overview(&now)?;
     if ctx.json {
-        #[derive(Serialize)]
-        struct Listing<'a> {
-            jobs: Vec<JobView<'a>>,
-            in_sync: bool,
-        }
-        return output::json(&Listing {
-            jobs: views,
-            in_sync,
-        });
+        return output::json(&overview);
     }
-    if views.is_empty() {
+    let paths = ctx.macron.paths();
+    if overview.jobs.is_empty() {
         println!(
             "No jobs yet. Add one with `macron add`, or write it into {}.",
-            tilde(&ctx.paths.jobs_file, &ctx.paths.home)
+            tilde(&paths.jobs_file, &paths.home)
         );
     } else {
-        let rows: Vec<Vec<String>> = views
+        let rows: Vec<Vec<String>> = overview
+            .jobs
             .iter()
-            .map(|view| {
-                let next = next_runs(view.job, &now).next();
+            .map(|status| {
                 vec![
-                    view.job.name().to_owned(),
-                    view.job.schedule_text().to_owned(),
-                    next.map_or_else(|| "-".to_owned(), |next| human_time(&next, &now)),
-                    last_run_cell(view.last_run, &now),
-                    view.state.as_str().to_owned(),
+                    status.job.name().to_owned(),
+                    status.job.schedule_text().to_owned(),
+                    status
+                        .next_run
+                        .as_ref()
+                        .map_or_else(|| "-".to_owned(), |next| human_time(next, &now)),
+                    last_run_cell(status.last_run.as_ref(), &now),
+                    status.state.as_str().to_owned(),
                 ]
             })
             .collect();
@@ -300,33 +233,31 @@ pub fn list(ctx: &Context) -> Result<()> {
             &rows,
         );
     }
-    if !in_sync {
+    if !overview.in_sync {
         println!("\nlaunchd does not match jobs.toml. Run `macron apply` to fix that.");
     }
     Ok(())
 }
 
 pub fn show(ctx: &Context, name: &str) -> Result<()> {
-    let config = ctx.config()?;
-    let job = config.job(name)?;
-    let changes = plan(ctx, &config)?;
-    let state = launchd::state(job, &changes);
-    let last_run = last_runs(ctx)?.remove(name);
     let now = Zoned::now();
-    let plist = launchd::plist_path(&ctx.paths, name);
-    let log = launchd::launchd_log(&ctx.paths, name);
+    let status = ctx.macron.status(name, &now)?;
+    let job = &status.job;
+    let paths = ctx.macron.paths();
+    let plist = launchd::plist_path(paths, name);
+    let log = launchd::launchd_log(paths, name);
     if ctx.json {
         #[derive(Serialize)]
         struct Details<'a> {
             #[serde(flatten)]
-            view: JobView<'a>,
+            status: &'a crate::ops::JobStatus,
             next_runs: Vec<String>,
             label: String,
             plist: &'a std::path::Path,
             launchd_log: &'a std::path::Path,
         }
         return output::json(&Details {
-            view: JobView::new(job, state, last_run.as_ref(), &now),
+            status: &status,
             next_runs: next_runs(job, &now)
                 .take(NEXT_RUNS)
                 .map(|time| time::rfc3339(&time))
@@ -336,7 +267,6 @@ pub fn show(ctx: &Context, name: &str) -> Result<()> {
             launchd_log: &log,
         });
     }
-    let home = &ctx.paths.home;
     let next: Vec<String> = next_runs(job, &now)
         .take(NEXT_RUNS_SHOWN)
         .map(|time| human_time(&time, &now))
@@ -363,7 +293,7 @@ pub fn show(ctx: &Context, name: &str) -> Result<()> {
         ),
         (
             "last run",
-            last_run.as_ref().map_or_else(
+            status.last_run.as_ref().map_or_else(
                 || "none yet".to_owned(),
                 |run| {
                     let started = human_time(&time::local(run.started_at), &now);
@@ -387,10 +317,10 @@ pub fn show(ctx: &Context, name: &str) -> Result<()> {
         ),
         ("notify", job.notify().as_str().to_owned()),
         ("keep runs", job.keep_runs().to_string()),
-        ("state", state.as_str().to_owned()),
+        ("state", status.state.as_str().to_owned()),
         ("label", launchd::label(name)),
-        ("plist", tilde(&plist, home)),
-        ("launchd log", tilde(&log, home)),
+        ("plist", tilde(&plist, &paths.home)),
+        ("launchd log", tilde(&log, &paths.home)),
     ]);
     Ok(())
 }
@@ -405,115 +335,69 @@ pub fn add(ctx: &Context, args: AddArgs) -> Result<()> {
     if args.disabled {
         spec.enabled = Some(false);
     }
-    let mut editor = ConfigEditor::open(&ctx.paths)?;
-    editor.insert(&args.job, &spec)?;
-    let config = editor.save()?;
-    let changes = reconcile(ctx, &config)?;
-    report_change(ctx, "Added", &config, &args.job, &changes)
+    let changed = ctx.macron.add(&args.job, &spec)?;
+    report_change(ctx, "Added", &changed)
 }
 
 pub fn edit(ctx: &Context, args: EditArgs) -> Result<()> {
-    let mut editor = ConfigEditor::open(&ctx.paths)?;
-    let current = editor.config()?.job(&args.job)?.spec().clone();
-    let mut spec = current.clone();
-    for field in &args.unset {
-        field.unset(&mut spec);
-    }
-    for key in &args.unset_env {
-        spec.env.remove(key);
-    }
-    if let Some(schedule) = args.schedule {
-        spec.schedule = schedule;
-    }
-    if !args.command.is_empty() {
-        spec.command = command_line(&args.command);
-    }
-    args.options.apply_to(&mut spec);
-    if spec == current {
-        let config = editor.config()?;
-        drop(editor);
-        return report_change(ctx, "Nothing to change in", &config, &args.job, &[]);
-    }
-    editor.update(&args.job, &spec)?;
-    let config = editor.save()?;
-    let changes = reconcile(ctx, &config)?;
-    report_change(ctx, "Updated", &config, &args.job, &changes)
+    let EditArgs {
+        job,
+        schedule,
+        options,
+        unset,
+        unset_env,
+        command,
+    } = args;
+    let changed = ctx.macron.edit(&job, |spec| {
+        for field in &unset {
+            field.unset(spec);
+        }
+        for key in &unset_env {
+            spec.env.remove(key);
+        }
+        if let Some(schedule) = schedule {
+            spec.schedule = schedule;
+        }
+        if !command.is_empty() {
+            spec.command = command_line(&command);
+        }
+        options.apply_to(spec);
+    })?;
+    let verb = if changed.edited {
+        "Updated"
+    } else {
+        "Nothing to change in"
+    };
+    report_change(ctx, verb, &changed)
 }
 
 pub fn set_enabled(ctx: &Context, name: &str, enabled: bool) -> Result<()> {
-    let mut editor = ConfigEditor::open(&ctx.paths)?;
-    let mut spec = editor.config()?.job(name)?.spec().clone();
-    // Enabled is the default, so enabling removes the setting rather than writing it.
-    spec.enabled = (!enabled).then_some(false);
-    editor.update(name, &spec)?;
-    let config = editor.save()?;
-    let changes = reconcile(ctx, &config)?;
-    report_change(
-        ctx,
-        if enabled { "Enabled" } else { "Disabled" },
-        &config,
-        name,
-        &changes,
-    )
+    let changed = ctx.macron.set_enabled(name, enabled)?;
+    report_change(ctx, if enabled { "Enabled" } else { "Disabled" }, &changed)
 }
 
 pub fn remove(ctx: &Context, name: &str, yes: bool, purge: bool) -> Result<()> {
-    ctx.config()?.job(name)?;
+    ctx.macron.config()?.job(name)?;
     if !yes && !confirm(ctx, name, purge)? {
         println!("Kept {name}.");
         return Ok(());
     }
-    let mut editor = ConfigEditor::open(&ctx.paths)?;
-    editor.remove(name)?;
-    let config = editor.save()?;
-    let changes = reconcile(ctx, &config)?;
-    let purged = if purge { purge_history(ctx, name)? } else { 0 };
+    let removed = ctx.macron.remove(name, purge)?;
     if ctx.json {
-        #[derive(Serialize)]
-        struct Removed<'a> {
-            removed: &'a str,
-            purged_runs: usize,
-            changes: &'a [Change],
-        }
-        return output::json(&Removed {
-            removed: name,
-            purged_runs: purged,
-            changes: &changes,
-        });
+        return output::json(&removed);
     }
     println!("Removed {name}.");
-    match (purge, purged) {
+    match (purge, removed.purged_runs) {
         (false, _) => println!("Its run history stays; `macron runs {name}` shows it."),
         (true, 1) => println!("Deleted its 1 run and its log."),
         (true, purged) => println!("Deleted its {purged} runs and their logs."),
     }
-    report_other_changes(name, &changes);
+    report_other_changes(name, &removed.changes);
     Ok(())
 }
 
-/// Deletes the job's finished runs and their logs, returning how many. A run still going keeps its
-/// record and its log.
-fn purge_history(ctx: &Context, name: &str) -> Result<usize> {
-    let ids = History::open(&ctx.paths.history_db)?.purge(name)?;
-    for id in &ids {
-        let log = runlog::path(&ctx.paths, name, *id);
-        if let Err(err) = fs::remove_file(&log)
-            && err.kind() != io::ErrorKind::NotFound
-        {
-            return Err(Error::io("delete", &log)(err));
-        }
-    }
-    // Only goes if empty, which it is unless a run is still writing to it.
-    let _ = fs::remove_dir(ctx.paths.logs_dir.join(name));
-    Ok(ids.len())
-}
-
 pub fn apply(ctx: &Context, dry_run: bool) -> Result<()> {
-    let config = ctx.config()?;
-    let changes = plan(ctx, &config)?;
-    if !dry_run {
-        launchd::apply(&changes, &ctx.paths, &ctx.launchctl)?;
-    }
+    let changes = ctx.macron.apply(dry_run)?;
     if ctx.json {
         #[derive(Serialize)]
         struct Applied<'a> {
@@ -566,41 +450,21 @@ fn confirm(ctx: &Context, name: &str, purge: bool) -> Result<bool> {
 }
 
 /// Reports a job after a change: in JSON, the job and every change made; for people, a summary.
-fn report_change(
-    ctx: &Context,
-    verb: &str,
-    config: &Config,
-    name: &str,
-    changes: &[Change],
-) -> Result<()> {
-    let job = config.job(name)?;
-    // Every change has just been applied, so the job is where its config puts it.
-    let state = if job.enabled() {
-        State::Active
-    } else {
-        State::Disabled
-    };
-    let last_run = last_runs(ctx)?.remove(name);
-    let now = Zoned::now();
+fn report_change(ctx: &Context, verb: &str, changed: &Changed) -> Result<()> {
     if ctx.json {
-        #[derive(Serialize)]
-        struct Changed<'a> {
-            job: JobView<'a>,
-            changes: &'a [Change],
-        }
-        return output::json(&Changed {
-            job: JobView::new(job, state, last_run.as_ref(), &now),
-            changes,
-        });
+        return output::json(changed);
     }
+    let status = &changed.job;
+    let name = status.job.name();
+    let now = Zoned::now();
     println!("{verb} {name}.");
-    let mut summary = vec![("runs", job.schedule().describe())];
-    if let Some(next) = next_runs(job, &now).next() {
-        summary.push(("next", human_time(&next, &now)));
+    let mut summary = vec![("runs", status.job.schedule().describe())];
+    if let Some(next) = &status.next_run {
+        summary.push(("next", human_time(next, &now)));
     }
-    summary.push(("state", state.as_str().to_owned()));
+    summary.push(("state", status.state.as_str().to_owned()));
     output::fields(&summary);
-    report_other_changes(name, changes);
+    report_other_changes(name, &changed.changes);
     Ok(())
 }
 
