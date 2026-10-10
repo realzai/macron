@@ -12,7 +12,7 @@ cron, launchd runs a job missed while the Mac slept, once, when it wakes.
 ## Before you start
 
 - Run `macron --version`. If it is not found, ask the user before installing it:
-  `cargo install --git https://github.com/realzai/macron`.
+  `brew install realzai/tap/macron`, or without Homebrew, `cargo install macron-cli`.
 - **Always pass `--json`, before any `--`.** Everything after `--` is the job's command, so
   `macron add x -s @daily -- ./sync --json` adds a job that runs `./sync --json`.
 - **Single-quote the job's command and any `~` or `$VAR` in it**, so they reach the job as

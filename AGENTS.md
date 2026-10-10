@@ -18,8 +18,9 @@ cargo run -- paths            # run the binary; arguments go after --
 MACRON_UPDATE_DOCS=1 cargo test --lib cli_reference   # regenerate docs/cli.md
 ```
 
-CI runs `fmt --check`, `clippy -D warnings` and `test` on macOS. Run all three before calling a
-change done.
+CI runs `fmt --check`, `clippy -D warnings` and `test` on macOS, and builds with the oldest Rust
+that `rust-version` in `Cargo.toml` promises. Run the first three before calling a change done.
+Releases are made by tagging; [`docs/releasing.md`](docs/releasing.md) has the steps.
 
 ## Layout
 
@@ -50,7 +51,10 @@ change done.
 | `docs/plan.md` | The plan |
 | `docs/cli.md` | The command-line reference, generated from `src/cli` |
 | `docs/json.md` | What every command prints with `--json`, and every error code |
+| `docs/releasing.md` | How to make a release |
 | `skills/macron/` | The skill that teaches agents to use macron |
+| `CHANGELOG.md` | What changed in each release, drafted by `git cliff` from `cliff.toml` |
+| `dist-workspace.toml` | How releases are built and published; `.github/workflows/release.yml` is generated from it |
 
 ## Rules
 

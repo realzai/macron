@@ -1,15 +1,29 @@
 [package]
 name = "macron-cli"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
 # 1.89 stabilised File::lock, which guards jobs.toml against concurrent edits from the CLI and the web UI.
 rust-version = "1.89"
 description = "Schedule, run and watch local jobs on macOS, backed by launchd, from a CLI or a local web UI"
 repository = "https://github.com/realzai/macron"
+homepage = "https://github.com/realzai/macron"
 readme = "README.md"
 license = "MIT"
 keywords = ["cron", "launchd", "macos", "scheduler", "cli"]
 categories = ["command-line-utilities"]
+# What `cargo publish` uploads: what builds and tests macron, including the docs the tests check.
+include = [
+    "/src/",
+    "/templates/",
+    "/assets/",
+    "/tests/",
+    "/docs/cli.md",
+    "/docs/json.md",
+    "/skills/",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/README.md",
+]
 
 [lib]
 name = "macron"
@@ -48,3 +62,8 @@ croner = { version = "4.0.1", default-features = false, features = ["jiff"] }
 proptest = "1.11.0"
 tempfile = "3.27.0"
 tower = { version = "0.5.3", features = ["util"] }
+
+# The profile dist builds releases with.
+[profile.dist]
+inherits = "release"
+lto = "thin"

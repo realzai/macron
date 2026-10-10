@@ -10,8 +10,8 @@ easily as you can.
 
 ![The jobs page of macron's web interface, listing four jobs with their schedules, next runs, last runs and state](docs/images/jobs.png)
 
-> **Status: early development.** Jobs, run history, logs, the web interface and the agent skill
-> work today. Packaged releases are next; the plan is in [`docs/plan.md`](docs/plan.md).
+> **Status: early.** Everything below works and is tested. Until 1.0, a release can change the
+> command line or the JSON output; [the changelog](CHANGELOG.md) says when one does.
 
 ## Why not cron?
 
@@ -22,10 +22,23 @@ launchd, a record of every run, and a notification when one fails.
 
 ## Install
 
-From source, with a [Rust toolchain](https://rustup.rs):
+With [Homebrew](https://brew.sh):
 
 ```sh
-cargo install --git https://github.com/realzai/macron
+brew install realzai/tap/macron
+```
+
+Or with the installer from the [latest release](https://github.com/realzai/macron/releases/latest),
+which puts `macron` in `~/.cargo/bin`:
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/realzai/macron/releases/latest/download/macron-cli-installer.sh | sh
+```
+
+Or from source, with [Rust](https://rustup.rs) 1.89 or newer:
+
+```sh
+cargo install macron-cli
 ```
 
 ## Use
