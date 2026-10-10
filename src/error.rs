@@ -52,6 +52,12 @@ pub enum Error {
         detail: String,
     },
 
+    #[error("cannot start job `{job}`: {reason}")]
+    Spawn { job: String, reason: String },
+
+    #[error("{0} needs --yes when there is no terminal to confirm on")]
+    ConfirmationRequired(String),
+
     #[error("cannot encode output as JSON: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -70,6 +76,8 @@ impl Error {
             Error::InvalidConfig { .. } => "invalid_config",
             Error::Io { .. } => "io",
             Error::Launchctl { .. } => "launchctl",
+            Error::Spawn { .. } => "spawn_failed",
+            Error::ConfirmationRequired(_) => "confirmation_required",
             Error::Json(_) => "internal",
         }
     }

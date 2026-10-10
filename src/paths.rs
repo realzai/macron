@@ -13,6 +13,9 @@ use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Paths {
+    /// The home directory, which `~` in a job's working directory stands for.
+    #[serde(skip)]
+    pub home: PathBuf,
     pub config_dir: PathBuf,
     pub jobs_file: PathBuf,
     pub state_dir: PathBuf,
@@ -62,6 +65,7 @@ impl Paths {
             launchd_logs_dir: state_dir.join("launchd"),
             state_dir,
             launch_agents_dir,
+            home,
         })
     }
 }

@@ -7,6 +7,7 @@ pub mod cli;
 pub mod config;
 pub mod duration;
 pub mod error;
+pub mod exec;
 pub mod job;
 pub mod launchd;
 pub mod paths;

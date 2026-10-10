@@ -1,0 +1,30 @@
+#!/bin/sh
+# A stand-in for launchctl, for tests. It keeps the labels it has loaded as files in
+# $FAKE_LAUNCHCTL_STATE/loaded, appends every call to $FAKE_LAUNCHCTL_STATE/calls, and exits with the
+# statuses the real launchctl uses.
+set -eu
+state="${FAKE_LAUNCHCTL_STATE:?}"
+mkdir -p "$state/loaded"
+echo "$*" >> "$state/calls"
+case "$1" in
+  print)
+    [ -e "$state/loaded/${2##*/}" ] || exit 113 ;;
+  bootstrap)
+    label=$(basename "$3" .plist)
+    if [ -e "$state/loaded/$label" ]; then
+      echo "Bootstrap failed: 5: Input/output error" >&2
+      exit 5
+    fi
+    touch "$state/loaded/$label" ;;
+  bootout)
+    if [ ! -e "$state/loaded/${2##*/}" ]; then
+      echo "Boot-out failed: 3: No such process" >&2
+      exit 3
+    fi
+    rm "$state/loaded/${2##*/}" ;;
+  kickstart)
+    [ -e "$state/loaded/${2##*/}" ] || exit 113 ;;
+  *)
+    echo "fake launchctl: unexpected call: $*" >&2
+    exit 64 ;;
+esac

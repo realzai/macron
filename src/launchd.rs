@@ -100,6 +100,65 @@ pub fn render(job: &Job, binary: &Path, paths: &Paths) -> Vec<u8> {
     xml
 }
 
+/// The path to run macron from: the one this process was started as. A symlink is kept as the
+/// symlink, so a Homebrew upgrade, which moves the real file but keeps the link, leaves installed
+/// jobs working.
+pub fn current_binary() -> Result<PathBuf> {
+    std::env::current_exe().map_err(Error::io("locate", "the running macron binary"))
+}
+
+/// Where a job stands with launchd.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum State {
+    /// Installed, up to date and loaded: launchd runs it on schedule.
+    Active,
+    /// Enabled, but not installed.
+    NotInstalled,
+    /// Installed, but its plist no longer matches the job.
+    OutOfDate,
+    /// Installed and up to date, but launchd has not loaded it.
+    NotLoaded,
+    /// Disabled and uninstalled.
+    Disabled,
+    /// Disabled, but still installed.
+    DisabledButInstalled,
+}
+
+impl State {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            State::Active => "active",
+            State::NotInstalled => "not installed",
+            State::OutOfDate => "out of date",
+            State::NotLoaded => "not loaded",
+            State::Disabled => "disabled",
+            State::DisabledButInstalled => "disabled, still installed",
+        }
+    }
+
+    /// Whether the job is where its config says it should be.
+    pub fn is_settled(self) -> bool {
+        matches!(self, State::Active | State::Disabled)
+    }
+}
+
+/// `job`'s state, given the changes [`plan`] found.
+pub fn state(job: &Job, changes: &[Change]) -> State {
+    let pending = changes
+        .iter()
+        .find(|change| change.job == job.name())
+        .map(|change| change.action);
+    match (job.enabled(), pending) {
+        (_, Some(Action::Remove)) => State::DisabledButInstalled,
+        (false, _) => State::Disabled,
+        (true, None) => State::Active,
+        (true, Some(Action::Install)) => State::NotInstalled,
+        (true, Some(Action::Update)) => State::OutOfDate,
+        (true, Some(Action::Load)) => State::NotLoaded,
+    }
+}
+
 /// What [`apply`] does to one job's launchd agent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
