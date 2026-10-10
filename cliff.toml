@@ -1,0 +1,46 @@
+# How `git cliff` drafts a release's entry in CHANGELOG.md from the Conventional Commits since the
+# last tag. docs/releasing.md has the command; the draft is then edited for people to read.
+
+[changelog]
+# `--prepend` keeps this at the top of the file and puts the new entry under it.
+header = """
+# Changelog
+
+What changed in each release of macron. Versions follow [Semantic Versioning](https://semver.org).
+"""
+body = """
+{% if version -%}
+## [{{ version | trim_start_matches(pat="v") }}](https://github.com/realzai/macron/releases/tag/{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+## Unreleased
+{% endif -%}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+{% for commit in commits %}
+- {% if commit.breaking %}**Breaking:** {% endif %}{{ commit.message | upper_first }}\
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+# Ends the entry with one line break, so a prepended entry is followed by a blank line.
+postprocessors = [{ pattern = "\\n*$", replace = "\n" }]
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+protect_breaking_commits = true
+tag_pattern = "v[0-9].*"
+sort_commits = "oldest"
+# GitHub's merge commits are not Conventional Commits. Naming them as chores keeps git cliff's
+# warning about commits it cannot parse for commits that should have parsed.
+commit_preprocessors = [
+  { pattern = '^Merge pull request #\d+ from .*', replace = "chore: merge" },
+]
+# Only what someone using macron would notice. The comments order the groups as Keep a Changelog
+# does; `striptags` removes them from the headings.
+commit_parsers = [
+  { message = "^feat", group = "<!-- 0 -->Added" },
+  { message = "^perf", group = "<!-- 1 -->Changed" },
+  { message = "^fix", group = "<!-- 2 -->Fixed" },
+  { message = ".*", skip = true },
+]
