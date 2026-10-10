@@ -108,7 +108,7 @@ the user asked for.
 |---|---|---|
 | `exit_code` 127, "command not found" | The program is not on the job's `PATH`. Jobs run in a non-interactive login shell (`zsh -lc` by default), which reads `~/.zprofile` but not `~/.zshrc` | Use the program's absolute path (`which <program>` in the user's shell), set `-e PATH=...`, or move the user's `PATH` setup to `~/.zprofile` (ask first) |
 | `exit_code` 126 | The script is not executable | `chmod +x` it |
-| "Operation not permitted" reading `~/Documents`, `~/Desktop`, `~/Downloads` or app data | macOS privacy protection | Only the user can fix it: System Settings → Privacy & Security → Full Disk Access, add the macron binary named in `doctor`'s `notes` |
+| "Operation not permitted" reading `~/Documents`, `~/Desktop`, `~/Downloads` or app data | macOS privacy protection. It can start after macron is upgraded or rebuilt, which can drop an earlier grant | Only the user can fix it: System Settings → Privacy & Security → Full Disk Access, add the macron binary named in `doctor`'s `notes` |
 | `status` `timed_out` | It ran past `timeout` | Find why it hangs (often waiting for input or a network), or raise `--timeout` |
 | `status` `lost` | The Mac shut down or restarted during the run | Usually not the job's fault; check the next run |
 | `status` `failed`, `exit_code` `null`, `error` set | The command could not start: its shell or workdir is missing | `macron doctor --json` names it; `macron edit` to fix |
@@ -128,6 +128,10 @@ the user asked for.
   clock, so `next_run` is `null` for it.
 - The job's launchd log (`launchd_log` in `show`) holds what macron could not record, such as a
   run that could not start. `doctor` reports recent entries.
+- macron was upgraded, moved or rebuilt, and installed jobs still run the old binary. `doctor`
+  reports it under `binary`; `macron apply --json` fixes it.
+- On the two nights a year the clocks change, a run inside the skipped or repeated hour runs
+  when launchd decides, which can differ from `next_run`.
 
 ## Change, pause, run now, remove
 
