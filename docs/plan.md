@@ -38,7 +38,8 @@ works* sections should stay true, and a change to either is a change to this fil
 | Web UI | `axum` serving server-rendered `askama` templates, `htmx` for interaction, assets embedded with `rust-embed` | No Node toolchain, so `cargo install` builds everything, and the binary is the whole product |
 | Time | `jiff` | Correct next-run times across time zones and DST |
 | Packaging | One crate, `macron-cli`, with a library and a `macron` binary | `macron` is taken on crates.io. One crate keeps `cargo install` and publishing simple. Split only if a second consumer of the library appears |
-| launchd labels | `io.github.realzai.macron.<job>` | Reverse-DNS, and the prefix is how macron finds its own plists. It never touches a plist without it |
+| launchd labels | `io.github.realzai.macron.<job>` | Reverse-DNS, and the prefix is how macron finds its own plists. It never touches a plist without it. The repo stays under `realzai`, so the prefix is permanent: changing it later would mean migrating every user's installed jobs |
+| License | MIT | |
 | Commits | Conventional Commits | The changelog is generated from them at release |
 
 ## How it works
@@ -140,27 +141,42 @@ next run times must agree.
 
 `macron exec <job>` is what launchd starts. It:
 
-1. Inserts a `runs` row: job, trigger (`schedule` or `manual`), start time, pid, command snapshot,
-   status `running`.
-2. Starts `<shell> -lc "<command>"` in its own process group, with `workdir` and `env` applied.
-3. Reads stdout and stderr as lines into `logs/<job>/<run-id>.jsonl`, each line
-   `{"t":"<RFC 3339>","s":"out"|"err","l":"<text>"}`. Invalid UTF-8 is replaced, not dropped. A run
-   stops recording past 10 MiB and marks its log truncated.
-4. Enforces `timeout`, killing the group with `nix::sys::signal::killpg`.
-5. Updates the row: end time, duration, exit code or signal, status `succeeded`, `failed` or
-   `timed_out`.
-6. Notifies per `notify`, then prunes runs beyond `keep_runs`.
+1. Inserts a `runs` row: job, trigger (`schedule` or `manual`), start time, its own pid, the command
+   as it is now, status `running`.
+2. Starts `<shell> -lc "<command>"` in its own process group, with `workdir` and `env` applied and
+   stdin from `/dev/null`.
+3. Reads stdout and stderr as lines into `logs/<job>/<run-id>.jsonl`, one record per line:
+   `{"t":<ms since the epoch>,"s":"out"|"err"|"macron","l":"<text>"}`. `macron` lines are macron's own
+   notes: could not start, reached the timeout, stopped recording. Invalid UTF-8 is replaced, not
+   dropped; lines past 64 KiB are split; output past 10 MiB is dropped with a note and the run
+   marked truncated. stdout and stderr come through separate pipes, so lines written to both in the
+   same instant can be recorded in either order.
+4. Enforces `timeout`: SIGTERM to the group, then SIGKILL 10 seconds later.
+5. After the command exits, reads what is left in the pipes for up to a second. Past that, the
+   pipes are held open by a background process the command started, and the run ends without it.
+6. Updates the row: end time, exit code or signal, status `succeeded`, `failed` or `timed_out`, and
+   the size of the output. A command that cannot start (missing workdir or shell) is `failed`
+   with the reason in `error`.
+7. Notifies per `notify`, then prunes runs and logs beyond `keep_runs`.
 
-A `running` row whose pid is gone (the Mac shut down mid-run) is marked `lost` the next time
-anything reads history.
+`exec` exits as the command did: its status, 128 plus a signal, or 124 for a timeout.
 
-**Manual runs go through launchd too.** `macron run <job>` writes a trigger marker into the state
-dir and calls `launchctl kickstart`, so a manual run gets exactly the environment a scheduled run
-gets. "It works when I run it but fails on schedule" is the most common cron complaint, and this
-removes it. `exec` consumes the marker to record the trigger as `manual`. launchd never starts a
-second instance of a running label, so runs of one job cannot overlap.
+A `running` row is marked `lost` when its `macron exec` is gone, or when it started before the Mac
+last booted, since after a restart its pid may belong to something else. This is checked whenever
+the history is opened, and on each poll of `logs --follow`.
 
-The schema is versioned with `PRAGMA user_version` and migrated forward on open.
+If the history cannot be opened, the job still runs, unrecorded, with its output in launchd's log.
+
+**Manual runs go through launchd too.** `macron run <job>` writes a request file into
+`state/requests/` and calls `launchctl kickstart`, so a manual run gets exactly the environment a
+scheduled run gets. "It works when I run it but fails on schedule" is the most common cron
+complaint, and this removes it. `exec` takes the request to record the trigger as `manual`; one
+older than a minute is ignored. launchd never starts a second instance of a running label, so runs
+of one job cannot overlap, and `run` refuses a job that is already running rather than appear to
+start it.
+
+The schema is versioned with `PRAGMA user_version` and migrated forward on open, under a write lock
+so two processes cannot both migrate.
 
 ## CLI
 
@@ -176,11 +192,11 @@ error. Error codes are a contract and live in `src/error.rs`. Nothing prompts wi
 | `macron show <job>` | One job in full, with its generated launchd schedule |
 | `macron add <job> --schedule <s> [options] -- <command…>` | Adds a job and installs it |
 | `macron edit <job> [--schedule <s>] [options] [-- <command…>]` | Changes fields of a job and reinstalls it |
-| `macron rm <job> [--yes]` | Uninstalls a job and removes it from `jobs.toml`. History stays until `--purge` |
+| `macron rm <job> [--yes] [--purge]` | Uninstalls a job and removes it from `jobs.toml`. Its history stays unless `--purge` |
 | `macron enable <job>` · `macron disable <job>` | |
 | `macron run <job> [--wait]` | Runs it now, through launchd. `--wait` follows the log until it ends and exits with the run's status |
 | `macron runs [<job>] [--limit N] [--status failed]` | Run history, newest first |
-| `macron logs <job> [--run <id>] [--follow] [--raw]` | A run's output, the latest by default. stderr is highlighted; `--raw` prints the lines with no decoration |
+| `macron logs <job> [--run <id>] [--follow] [--raw]` | A run's output, the latest by default. stderr is highlighted; `--raw` prints the lines with no decoration. With `--json --follow`, one object per line, then `{"run": …}` |
 | `macron apply [--dry-run]` | Reconciles launchd with `jobs.toml`. `--dry-run` prints the plan |
 | `macron doctor` | Checks config, plists, loaded state, binary path, and Full Disk Access hints |
 | `macron paths` | Where everything is |
@@ -260,7 +276,7 @@ describe, next run); plist generation; the `launchctl` wrapper; `add`, `edit`, `
 working directory, environment and timeout, its output going to launchd's log until M2 records it.
 *Done when* a job added with `macron add` fires on schedule on a real Mac.
 
-**M2. Runs and logs.** `exec`, the history database and its migrations, JSONL logs, truncation,
+**M2. Runs and logs (done).** `exec`, the history database and its migrations, JSONL logs, truncation,
 timeouts, trigger markers, `lost` detection, notifications, pruning; `run --wait`, `runs`,
 `logs --follow`. *Done when* a failing job shows in `macron runs` with its exit status and its
 stderr in `macron logs`.
@@ -294,11 +310,3 @@ These are why the design looks the way it does. Each one belongs in the skill an
   run` reports that instead of appearing to work.
 - **DST.** On the night the clocks change, a job scheduled inside the skipped or repeated hour runs
   when launchd decides. The predicted next run can disagree on those two nights; say so in the UI.
-
-## Open questions
-
-- **License.** Not chosen. `publish = false` is set in `Cargo.toml` until it is. MIT OR Apache-2.0
-  is the Rust convention.
-- **Label prefix.** `io.github.realzai.macron` ties installed jobs to this GitHub account. If the
-  repo moves to an organisation, changing the prefix needs a migration in `apply`. Decide before
-  v0.1.0, after which it is part of every user's installed state.

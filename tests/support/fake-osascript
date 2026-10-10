@@ -1,0 +1,6 @@
+#!/bin/sh
+# A stand-in for osascript, for tests: appends each notification's message, its last argument, to
+# $FAKE_NOTIFICATIONS instead of posting it.
+set -eu
+for argument; do message=$argument; done
+echo "$message" >> "${FAKE_NOTIFICATIONS:?}"

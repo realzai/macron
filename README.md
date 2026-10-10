@@ -3,18 +3,20 @@
 Schedule, run and watch local jobs on macOS.
 
 macron is cron for a Mac that sleeps. You describe your jobs once; macron installs them into
-launchd, which runs them on schedule, including runs missed while the Mac was asleep. Every command
-speaks JSON, so scripts and agents can drive it as easily as you can.
+launchd, which runs them on schedule, including runs missed while the Mac was asleep. Every run is
+recorded with its output, so you can see what happened. Every command speaks JSON, so scripts and
+agents can drive it as easily as you can.
 
-> **Status: early development.** Jobs can be added, changed and installed into launchd today. Run
-> history, `macron logs` and the `macron up` web interface are next. The plan, including what is
-> being built and in what order, is in [`docs/plan.md`](docs/plan.md).
+> **Status: early development.** Jobs, run history and logs work from the command line today. The
+> `macron up` web interface is next. The plan, including what is being built and in what order, is
+> in [`docs/plan.md`](docs/plan.md).
 
 ## Why not cron?
 
 cron skips any job whose time comes while your Mac is asleep, and tells you nothing when a job
 fails. launchd, which macOS ships, runs a missed job when the Mac wakes, but it is configured with
-XML files and `launchctl`. macron gives you cron's schedules on top of launchd.
+XML files and `launchctl`, and keeps no history. macron gives you cron's schedules on top of
+launchd, a record of every run, and a notification when one fails.
 
 ## Install
 
@@ -40,10 +42,26 @@ macron rm backup
 ```
 
 ```
-NAME    SCHEDULE    NEXT RUN         STATE   WHEN
-backup  0 9 1 * *   Sun 1 Nov 09:00  active  at 09:00 on the 1st of every month
-sweep   @every 15m  -                active  every 15 minutes
+NAME    SCHEDULE    NEXT RUN         LAST RUN               STATE
+backup  0 9 1 * *   Sun 1 Nov 09:00  succeeded 9d ago       active
+sweep   @every 15m  -                failed, exit 1 2m ago  active
 ```
+
+### Runs and logs
+
+```sh
+macron run backup            # run it now, through launchd, as its schedule would
+macron run backup --wait     # ...and watch its output, exiting as it did
+macron runs                  # recent runs of every job
+macron runs --status failed
+macron logs sweep            # the latest run's output, stderr in red
+macron logs sweep --follow   # keep printing until the run ends
+macron logs sweep --run 41 --raw | grep error
+```
+
+Each run's output is kept, up to 10 MiB, along with when it ran, how long it took and how it ended.
+The newest 100 runs of each job are kept; set `keep_runs` to change that. By default macOS posts a
+notification when a run fails; set `notify` to `always` or `never` to change that.
 
 Schedules are five-field cron (`minute hour day-of-month month day-of-week`, with names such as
 `MON` and `JAN`), a shorthand (`@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`), or
@@ -59,6 +77,7 @@ command = "~/bin/backup.sh"
 description = "Monthly photo backup"
 timeout = "2h"
 env = { BACKUP_TARGET = "/Volumes/Backup" }
+notify = "always"
 ```
 
 Each command runs in a login shell (`/bin/zsh -lc` by default), so your `PATH`, Homebrew's
@@ -76,3 +95,7 @@ included, is set up as in a terminal. Add `--json` to any command for machine-re
 ## Contributing
 
 See [`AGENTS.md`](AGENTS.md). It applies to people as much as to agents.
+
+## License
+
+[MIT](LICENSE)

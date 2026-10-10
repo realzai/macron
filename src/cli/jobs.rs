@@ -5,6 +5,8 @@
 //! the saved file. A failure after the save leaves the file changed and launchd behind, which
 //! `macron apply` finishes.
 
+use std::collections::BTreeMap;
+use std::fs;
 use std::io::{self, BufRead, IsTerminal, Write};
 
 use clap::{Args, ValueEnum};
@@ -12,11 +14,13 @@ use jiff::Zoned;
 use serde::Serialize;
 
 use super::Context;
-use super::output::{self, human_time, json_time, tilde};
+use super::output::{self, ago, human_time, run_status, tilde, took};
 use crate::config::{Config, ConfigEditor};
 use crate::error::{Error, Result};
+use crate::history::{History, Run};
 use crate::job::{Job, JobSpec, Notify};
 use crate::launchd::{self, Action, Change, State};
+use crate::{runlog, time};
 
 /// How many upcoming runs `show` lists in JSON. People get the first three.
 const NEXT_RUNS: usize = 5;
@@ -186,23 +190,44 @@ fn shell_quote(arg: &str) -> String {
     }
 }
 
-/// A job in JSON, with where it stands and when it runs next.
+/// A job in JSON, with where it stands, when it runs next and how it last ran.
 #[derive(Serialize)]
 struct JobView<'a> {
     #[serde(flatten)]
     job: &'a Job,
     state: State,
     next_run: Option<String>,
+    last_run: Option<&'a Run>,
 }
 
 impl<'a> JobView<'a> {
-    fn new(job: &'a Job, state: State, now: &Zoned) -> Self {
+    fn new(job: &'a Job, state: State, last_run: Option<&'a Run>, now: &Zoned) -> Self {
         Self {
             job,
             state,
-            next_run: next_runs(job, now).next().as_ref().map(json_time),
+            next_run: next_runs(job, now).next().as_ref().map(time::rfc3339),
+            last_run,
         }
     }
+}
+
+/// The latest run of each job, by name.
+fn last_runs(ctx: &Context) -> Result<BTreeMap<String, Run>> {
+    History::open(&ctx.paths.history_db)?.last_runs()
+}
+
+/// "succeeded 5m ago", for a table cell.
+fn last_run_cell(run: Option<&Run>, now: &Zoned) -> String {
+    run.map_or_else(
+        || "-".to_owned(),
+        |run| {
+            format!(
+                "{} {}",
+                run_status(run),
+                ago(&time::local(run.started_at), now)
+            )
+        },
+    )
 }
 
 /// The job's upcoming runs: none while it is disabled, and none for `@every`, which launchd counts
@@ -230,10 +255,14 @@ fn reconcile(ctx: &Context, config: &Config) -> Result<Vec<Change>> {
 pub fn list(ctx: &Context) -> Result<()> {
     let config = ctx.config()?;
     let changes = plan(ctx, &config)?;
+    let last_runs = last_runs(ctx)?;
     let now = Zoned::now();
     let views: Vec<JobView> = config
         .jobs()
-        .map(|job| JobView::new(job, launchd::state(job, &changes), &now))
+        .map(|job| {
+            let state = launchd::state(job, &changes);
+            JobView::new(job, state, last_runs.get(job.name()), &now)
+        })
         .collect();
     let in_sync = changes.is_empty();
     if ctx.json {
@@ -261,12 +290,15 @@ pub fn list(ctx: &Context) -> Result<()> {
                     view.job.name().to_owned(),
                     view.job.schedule_text().to_owned(),
                     next.map_or_else(|| "-".to_owned(), |next| human_time(&next, &now)),
+                    last_run_cell(view.last_run, &now),
                     view.state.as_str().to_owned(),
-                    view.job.schedule().describe(),
                 ]
             })
             .collect();
-        output::table(&["NAME", "SCHEDULE", "NEXT RUN", "STATE", "WHEN"], &rows);
+        output::table(
+            &["NAME", "SCHEDULE", "NEXT RUN", "LAST RUN", "STATE"],
+            &rows,
+        );
     }
     if !in_sync {
         println!("\nlaunchd does not match jobs.toml. Run `macron apply` to fix that.");
@@ -279,6 +311,7 @@ pub fn show(ctx: &Context, name: &str) -> Result<()> {
     let job = config.job(name)?;
     let changes = plan(ctx, &config)?;
     let state = launchd::state(job, &changes);
+    let last_run = last_runs(ctx)?.remove(name);
     let now = Zoned::now();
     let plist = launchd::plist_path(&ctx.paths, name);
     let log = launchd::launchd_log(&ctx.paths, name);
@@ -293,10 +326,10 @@ pub fn show(ctx: &Context, name: &str) -> Result<()> {
             launchd_log: &'a std::path::Path,
         }
         return output::json(&Details {
-            view: JobView::new(job, state, &now),
+            view: JobView::new(job, state, last_run.as_ref(), &now),
             next_runs: next_runs(job, &now)
                 .take(NEXT_RUNS)
-                .map(|time| json_time(&time))
+                .map(|time| time::rfc3339(&time))
                 .collect(),
             label: launchd::label(name),
             plist: &plist,
@@ -327,6 +360,21 @@ pub fn show(ctx: &Context, name: &str) -> Result<()> {
             } else {
                 next.join(", ")
             },
+        ),
+        (
+            "last run",
+            last_run.as_ref().map_or_else(
+                || "none yet".to_owned(),
+                |run| {
+                    let started = human_time(&time::local(run.started_at), &now);
+                    let took = run.duration_ms.map(took).unwrap_or_else(|| "-".to_owned());
+                    format!(
+                        "{}, {started}, took {took} (run {})",
+                        run_status(run),
+                        run.id
+                    )
+                },
+            ),
         ),
         ("command", job.command().to_owned()),
         ("description", or_none(job.description().map(str::to_owned))),
@@ -409,9 +457,9 @@ pub fn set_enabled(ctx: &Context, name: &str, enabled: bool) -> Result<()> {
     )
 }
 
-pub fn remove(ctx: &Context, name: &str, yes: bool) -> Result<()> {
+pub fn remove(ctx: &Context, name: &str, yes: bool, purge: bool) -> Result<()> {
     ctx.config()?.job(name)?;
-    if !yes && !confirm(ctx, name)? {
+    if !yes && !confirm(ctx, name, purge)? {
         println!("Kept {name}.");
         return Ok(());
     }
@@ -419,20 +467,45 @@ pub fn remove(ctx: &Context, name: &str, yes: bool) -> Result<()> {
     editor.remove(name)?;
     let config = editor.save()?;
     let changes = reconcile(ctx, &config)?;
+    let purged = if purge { purge_history(ctx, name)? } else { 0 };
     if ctx.json {
         #[derive(Serialize)]
         struct Removed<'a> {
             removed: &'a str,
+            purged_runs: usize,
             changes: &'a [Change],
         }
         return output::json(&Removed {
             removed: name,
+            purged_runs: purged,
             changes: &changes,
         });
     }
     println!("Removed {name}.");
+    match (purge, purged) {
+        (false, _) => println!("Its run history stays; `macron runs {name}` shows it."),
+        (true, 1) => println!("Deleted its 1 run and its log."),
+        (true, purged) => println!("Deleted its {purged} runs and their logs."),
+    }
     report_other_changes(name, &changes);
     Ok(())
+}
+
+/// Deletes the job's finished runs and their logs, returning how many. A run still going keeps its
+/// record and its log.
+fn purge_history(ctx: &Context, name: &str) -> Result<usize> {
+    let ids = History::open(&ctx.paths.history_db)?.purge(name)?;
+    for id in &ids {
+        let log = runlog::path(&ctx.paths, name, *id);
+        if let Err(err) = fs::remove_file(&log)
+            && err.kind() != io::ErrorKind::NotFound
+        {
+            return Err(Error::io("delete", &log)(err));
+        }
+    }
+    // Only goes if empty, which it is unless a run is still writing to it.
+    let _ = fs::remove_dir(ctx.paths.logs_dir.join(name));
+    Ok(ids.len())
 }
 
 pub fn apply(ctx: &Context, dry_run: bool) -> Result<()> {
@@ -470,13 +543,16 @@ pub fn apply(ctx: &Context, dry_run: bool) -> Result<()> {
 
 /// Asks on the terminal whether to remove the job. Without a terminal, or with `--json`, there is
 /// no one to ask, so `--yes` is required instead.
-fn confirm(ctx: &Context, name: &str) -> Result<bool> {
+fn confirm(ctx: &Context, name: &str, purge: bool) -> Result<bool> {
     if ctx.json || !io::stdin().is_terminal() {
         return Err(Error::ConfirmationRequired(format!("removing `{name}`")));
     }
-    eprint!(
-        "Remove {name}? It is uninstalled and deleted from jobs.toml; its history stays. [y/N] "
-    );
+    let history = if purge {
+        "its run history and logs are deleted"
+    } else {
+        "its run history stays"
+    };
+    eprint!("Remove {name}? It is uninstalled and deleted from jobs.toml, and {history}. [y/N] ");
     io::stderr().flush().ok();
     let mut answer = String::new();
     io::stdin()
@@ -504,6 +580,7 @@ fn report_change(
     } else {
         State::Disabled
     };
+    let last_run = last_runs(ctx)?.remove(name);
     let now = Zoned::now();
     if ctx.json {
         #[derive(Serialize)]
@@ -512,7 +589,7 @@ fn report_change(
             changes: &'a [Change],
         }
         return output::json(&Changed {
-            job: JobView::new(job, state, &now),
+            job: JobView::new(job, state, last_run.as_ref(), &now),
             changes,
         });
     }

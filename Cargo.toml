@@ -7,9 +7,9 @@ rust-version = "1.89"
 description = "Schedule, run and watch local jobs on macOS, backed by launchd, from a CLI or a local web UI"
 repository = "https://github.com/realzai/macron"
 readme = "README.md"
+license = "MIT"
 keywords = ["cron", "launchd", "macos", "scheduler", "cli"]
 categories = ["command-line-utilities"]
-publish = false
 
 [lib]
 name = "macron"
@@ -31,7 +31,7 @@ askama = "0.16.1"
 axum = "0.8.9"
 clap = { version = "4.6.7", features = ["derive", "env", "wrap_help"] }
 jiff = { version = "0.2.38", features = ["serde"] }
-nix = { version = "0.31.3", features = ["signal", "process", "user"] }
+nix = { version = "0.31.3", features = ["signal", "process", "user", "time"] }
 plist = "1.10.1"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 rust-embed = "8.13.0"

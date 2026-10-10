@@ -14,6 +14,7 @@ use tempfile::TempDir;
 pub const LABEL_PREFIX: &str = "io.github.realzai.macron.";
 
 const FAKE_LAUNCHCTL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/fake-launchctl");
+const FAKE_OSASCRIPT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/fake-osascript");
 
 pub struct Sandbox {
     root: TempDir,
@@ -88,7 +89,10 @@ impl Sandbox {
             .env("MACRON_STATE_DIR", root.join("state"))
             .env("MACRON_LAUNCH_AGENTS_DIR", self.agents_dir())
             .env("MACRON_LAUNCHCTL", FAKE_LAUNCHCTL)
-            .env("FAKE_LAUNCHCTL_STATE", root.join("launchctl"));
+            .env("FAKE_LAUNCHCTL_STATE", root.join("launchctl"))
+            .env("FAKE_MACRON_BIN", env!("CARGO_BIN_EXE_macron"))
+            .env("MACRON_OSASCRIPT", FAKE_OSASCRIPT)
+            .env("FAKE_NOTIFICATIONS", root.join("notifications"));
         command
     }
 
@@ -126,6 +130,15 @@ impl Sandbox {
             .unwrap_or_default();
         labels.sort();
         labels
+    }
+}
+
+impl Sandbox {
+    /// The messages of the notifications posted, in order.
+    pub fn notifications(&self) -> Vec<String> {
+        fs::read_to_string(self.root.path().join("notifications"))
+            .map(|text| text.lines().map(str::to_owned).collect())
+            .unwrap_or_default()
     }
 }
 

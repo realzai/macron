@@ -23,7 +23,11 @@ case "$1" in
     fi
     rm "$state/loaded/${2##*/}" ;;
   kickstart)
-    [ -e "$state/loaded/${2##*/}" ] || exit 113 ;;
+    # Starts the job the way launchd would: `macron exec <job>`, detached, with the environment
+    # macron passed down, which points it at the test's sandbox.
+    label="${2##*/}"
+    [ -e "$state/loaded/$label" ] || exit 113
+    ( "${FAKE_MACRON_BIN:?}" exec "${label#io.github.realzai.macron.}" >/dev/null 2>&1 & ) ;;
   *)
     echo "fake launchctl: unexpected call: $*" >&2
     exit 64 ;;
