@@ -4,6 +4,8 @@
 mod doctor;
 mod jobs;
 mod output;
+#[cfg(test)]
+mod reference;
 mod runs;
 
 use std::ffi::OsString;
