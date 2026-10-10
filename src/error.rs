@@ -58,6 +58,28 @@ pub enum Error {
     #[error("{0} needs --yes when there is no terminal to confirm on")]
     ConfirmationRequired(String),
 
+    #[error("`{0}` has not run yet")]
+    NoRuns(String),
+
+    #[error("`{job}` has no run {run}")]
+    NoSuchRun { job: String, run: i64 },
+
+    #[error("`{0}` is disabled, so launchd cannot start it; run `macron enable {0}` first")]
+    JobDisabled(String),
+
+    #[error("`{0}` is not loaded into launchd; run `macron apply` first")]
+    NotLoaded(String),
+
+    #[error("`{job}` is already running, as run {run}, and launchd does not start a job twice")]
+    AlreadyRunning { job: String, run: i64 },
+
+    #[error("launchd did not start `{job}` within {seconds} seconds; its launchd log may say why: {}", log.display())]
+    DidNotStart {
+        job: String,
+        seconds: u64,
+        log: PathBuf,
+    },
+
     #[error("cannot read the run log {}: {reason}", path.display())]
     InvalidLog { path: PathBuf, reason: String },
 
@@ -90,6 +112,12 @@ impl Error {
             Error::Launchctl { .. } => "launchctl",
             Error::Spawn { .. } => "spawn_failed",
             Error::ConfirmationRequired(_) => "confirmation_required",
+            Error::NoRuns(_) => "no_runs",
+            Error::NoSuchRun { .. } => "no_such_run",
+            Error::JobDisabled(_) => "job_disabled",
+            Error::NotLoaded(_) => "not_loaded",
+            Error::AlreadyRunning { .. } => "already_running",
+            Error::DidNotStart { .. } => "did_not_start",
             Error::InvalidLog { .. } => "invalid_log",
             Error::Database(_) => "database",
             Error::HistoryTooNew { .. } => "history_too_new",

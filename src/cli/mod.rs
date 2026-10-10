@@ -3,6 +3,7 @@
 
 mod jobs;
 mod output;
+mod runs;
 
 use std::ffi::OsString;
 use std::process::ExitCode;
@@ -60,6 +61,9 @@ enum Command {
         /// Remove without asking. Required when there is no terminal to ask on
         #[arg(short, long)]
         yes: bool,
+        /// Also delete the job's run history and logs
+        #[arg(long)]
+        purge: bool,
     },
     /// Install a disabled job again
     Enable {
@@ -71,6 +75,18 @@ enum Command {
         /// The job's name
         job: String,
     },
+    /// Run a job now, through launchd, as its schedule would
+    Run {
+        /// The job's name
+        job: String,
+        /// Print the run's output as it happens, and exit as the run did
+        #[arg(short, long)]
+        wait: bool,
+    },
+    /// List recent runs, newest first
+    Runs(runs::RunsArgs),
+    /// Print a run's output
+    Logs(runs::LogsArgs),
     /// Make launchd match jobs.toml, after editing it by hand
     Apply {
         /// Show what would change without changing it
@@ -126,9 +142,12 @@ fn execute(command: Command, json: bool) -> Result<ExitCode> {
         Command::Show { job } => jobs::show(&ctx, &job)?,
         Command::Add(args) => jobs::add(&ctx, args)?,
         Command::Edit(args) => jobs::edit(&ctx, args)?,
-        Command::Rm { job, yes } => jobs::remove(&ctx, &job, yes)?,
+        Command::Rm { job, yes, purge } => jobs::remove(&ctx, &job, yes, purge)?,
         Command::Enable { job } => jobs::set_enabled(&ctx, &job, true)?,
         Command::Disable { job } => jobs::set_enabled(&ctx, &job, false)?,
+        Command::Run { job, wait } => return runs::run(&ctx, &job, wait),
+        Command::Runs(args) => runs::list(&ctx, args)?,
+        Command::Logs(args) => runs::logs(&ctx, args)?,
         Command::Apply { dry_run } => jobs::apply(&ctx, dry_run)?,
         Command::Paths => paths(&ctx)?,
         Command::Exec { job } => return exec(&ctx, &job),

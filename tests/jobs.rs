@@ -165,7 +165,7 @@ fn ls_shows_each_job_with_its_state_and_next_run() {
     let mut lines = text.lines();
     assert_eq!(
         lines.next().unwrap().split_whitespace().collect::<Vec<_>>(),
-        ["NAME", "SCHEDULE", "NEXT", "RUN", "STATE", "WHEN"]
+        ["NAME", "SCHEDULE", "NEXT", "RUN", "LAST", "RUN", "STATE"]
     );
     assert!(lines.next().unwrap().starts_with("backup  0 9 1 * *"));
 }

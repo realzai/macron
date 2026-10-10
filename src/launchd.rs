@@ -334,6 +334,12 @@ impl Launchctl {
             .map(drop)
     }
 
+    /// Has launchd start the label's job now, as if its time had come.
+    pub fn start(&self, label: &str) -> Result<()> {
+        let target = format!("{}/{label}", self.domain);
+        self.run(&["kickstart", &target], &[]).map(drop)
+    }
+
     /// Unloads the label. One that is not loaded is left as it is.
     pub fn unload(&self, label: &str) -> Result<()> {
         let target = format!("{}/{label}", self.domain);

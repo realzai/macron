@@ -57,6 +57,7 @@ pub enum Trigger {
 /// Where a run is, or how it ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, clap::ValueEnum)]
 #[serde(rename_all = "snake_case")]
+#[value(rename_all = "snake_case")]
 pub enum Status {
     Running,
     /// The command exited with status 0.
@@ -344,18 +345,21 @@ impl History {
         Ok(())
     }
 
-    /// Deletes every finished run of the job, returning how many.
-    pub fn purge(&self, job: &str) -> Result<usize> {
-        Ok(self.conn.execute(
-            "DELETE FROM runs WHERE job = ?1 AND status != 'running'",
-            [job],
-        )?)
+    /// Deletes every finished run of the job, returning the ids deleted so their logs can go too.
+    pub fn purge(&self, job: &str) -> Result<Vec<i64>> {
+        let mut statement = self
+            .conn
+            .prepare("DELETE FROM runs WHERE job = ?1 AND status != 'running' RETURNING id")?;
+        let ids = statement
+            .query_map([job], |row| row.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        Ok(ids)
     }
 
     /// Marks as lost every run still recorded as running whose `macron exec` is gone, or that
     /// started before the Mac last booted: after a restart, its process id may belong to something
     /// else.
-    fn mark_lost(&self) -> Result<()> {
+    pub fn mark_lost(&self) -> Result<()> {
         let mut statement = self
             .conn
             .prepare("SELECT id, pid, started_at FROM runs WHERE status = 'running'")?;
@@ -619,7 +623,7 @@ mod tests {
             .collect();
         assert_eq!(left, [ids[4], ids[3]]);
         assert!(history.run(other).unwrap().is_some());
-        assert_eq!(history.purge("a").unwrap(), 2);
+        assert_eq!(history.purge("a").unwrap().len(), 2);
     }
 
     #[test]
