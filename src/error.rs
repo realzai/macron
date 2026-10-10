@@ -44,6 +44,14 @@ pub enum Error {
         source: io::Error,
     },
 
+    #[error("`{command}` exited with status {status}{detail}")]
+    Launchctl {
+        command: String,
+        status: i32,
+        /// What `launchctl` printed to stderr, as `": <message>"`, or empty.
+        detail: String,
+    },
+
     #[error("cannot encode output as JSON: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -61,6 +69,7 @@ impl Error {
             Error::NoSuchJob(_) => "no_such_job",
             Error::InvalidConfig { .. } => "invalid_config",
             Error::Io { .. } => "io",
+            Error::Launchctl { .. } => "launchctl",
             Error::Json(_) => "internal",
         }
     }

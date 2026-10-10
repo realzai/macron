@@ -18,6 +18,9 @@ pub struct Paths {
     pub state_dir: PathBuf,
     pub history_db: PathBuf,
     pub logs_dir: PathBuf,
+    /// Where launchd writes what a job's process prints before macron captures it, and errors from
+    /// macron itself when it cannot start a run.
+    pub launchd_logs_dir: PathBuf,
     /// Where launchd looks for per-user agents, and so where macron writes its plists.
     pub launch_agents_dir: PathBuf,
 }
@@ -56,6 +59,7 @@ impl Paths {
             config_dir,
             history_db: state_dir.join("history.db"),
             logs_dir: state_dir.join("logs"),
+            launchd_logs_dir: state_dir.join("launchd"),
             state_dir,
             launch_agents_dir,
         })
@@ -128,6 +132,10 @@ mod tests {
         assert_eq!(
             paths.logs_dir,
             Path::new("/Users/ada/.local/state/macron/logs")
+        );
+        assert_eq!(
+            paths.launchd_logs_dir,
+            Path::new("/Users/ada/.local/state/macron/launchd")
         );
         assert_eq!(
             paths.launch_agents_dir,

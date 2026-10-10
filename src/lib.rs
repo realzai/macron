@@ -8,5 +8,6 @@ pub mod config;
 pub mod duration;
 pub mod error;
 pub mod job;
+pub mod launchd;
 pub mod paths;
 pub mod schedule;

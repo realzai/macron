@@ -68,6 +68,7 @@ fn paths(json: bool) -> Result<()> {
         ("state dir", &paths.state_dir),
         ("history db", &paths.history_db),
         ("logs dir", &paths.logs_dir),
+        ("launchd logs", &paths.launchd_logs_dir),
         ("launch agents", &paths.launch_agents_dir),
     ] {
         println!("{label:<14} {}", path.display());

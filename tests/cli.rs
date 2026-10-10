@@ -30,6 +30,7 @@ fn paths_json_reports_every_location() {
     assert_eq!(paths["state_dir"], "/tmp/m");
     assert_eq!(paths["history_db"], "/tmp/m/history.db");
     assert_eq!(paths["logs_dir"], "/tmp/m/logs");
+    assert_eq!(paths["launchd_logs_dir"], "/tmp/m/launchd");
     assert_eq!(
         paths["launch_agents_dir"],
         "/Users/ada/Library/LaunchAgents"

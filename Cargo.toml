@@ -31,7 +31,7 @@ askama = "0.16.1"
 axum = "0.8.9"
 clap = { version = "4.6.7", features = ["derive", "env", "wrap_help"] }
 jiff = { version = "0.2.38", features = ["serde"] }
-nix = { version = "0.31.3", features = ["signal", "process"] }
+nix = { version = "0.31.3", features = ["signal", "process", "user"] }
 plist = "1.10.1"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 rust-embed = "8.13.0"
@@ -44,6 +44,5 @@ toml_edit = "0.25.17"
 
 [dev-dependencies]
 croner = { version = "4.0.1", default-features = false, features = ["jiff"] }
-insta = "1.49.0"
 proptest = "1.11.0"
 tempfile = "3.27.0"
