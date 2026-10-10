@@ -232,12 +232,26 @@ fn usage_error(err: clap::Error, args: &[OsString]) -> ExitCode {
     let message = if err.kind() == ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand {
         "a command is required; see `macron --help`".to_owned()
     } else {
-        let rendered = err.render().to_string();
-        let first_line = rendered.lines().next().unwrap_or_default();
-        first_line.trim_start_matches("error: ").to_owned()
+        usage_message(&err.render().to_string())
     };
     eprintln!("{}", error_json("usage", &message));
     ExitCode::from(USAGE_EXIT)
+}
+
+/// clap's error as one line: its first paragraph, which can list what is missing or allowed on
+/// the lines after the first, without the usage and the hint that follow.
+fn usage_message(rendered: &str) -> String {
+    let mut lines = rendered.lines().take_while(|line| !line.trim().is_empty());
+    let first = lines
+        .next()
+        .unwrap_or_default()
+        .trim_start_matches("error: ");
+    let rest: Vec<&str> = lines.map(str::trim).collect();
+    if rest.is_empty() {
+        first.to_owned()
+    } else {
+        format!("{first} {}", rest.join(", "))
+    }
 }
 
 fn error_json(code: &str, message: &str) -> serde_json::Value {

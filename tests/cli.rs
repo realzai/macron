@@ -60,6 +60,27 @@ fn with_json_a_usage_error_is_a_json_error() {
 }
 
 #[test]
+fn a_json_usage_error_names_what_is_missing() {
+    let out = macron(&["add", "--json"], &[("HOME", "/Users/ada")]);
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(
+        json(&out.stderr)["error"]["message"],
+        "the following required arguments were not provided: --schedule <SCHEDULE>, <JOB>, \
+         <COMMAND>..."
+    );
+
+    let out = macron(
+        &["--json", "edit", "backup", "--notify", "sometimes"],
+        &[("HOME", "/Users/ada")],
+    );
+    assert_eq!(
+        json(&out.stderr)["error"]["message"],
+        "invalid value 'sometimes' for '--notify <NOTIFY>' [possible values: never, failure, \
+         always]"
+    );
+}
+
+#[test]
 fn without_json_a_usage_error_is_text() {
     let out = macron(&["frobnicate"], &[("HOME", "/Users/ada")]);
     assert_eq!(out.status.code(), Some(2));
