@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} · macron</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="/">macron</a>
+  </header>
+  <main class="narrow">
+    <h1>{{ title }}</h1>
+    <p class="message">{{ message|safe }}</p>
+    {% if back %}<p><a href="/">Back to jobs</a></p>{% endif %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Jobs · macron{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Jobs</h1>
+</div>
+<div id="jobs" data-refresh="/?partial=jobs">
+{{ table|safe }}
+</div>
+{% endblock %}

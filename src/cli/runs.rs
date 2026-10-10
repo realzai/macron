@@ -12,7 +12,7 @@ use super::Context;
 use super::output::{self, Paint};
 use crate::error::Result;
 use crate::history::{Filter, Run, Status, Trigger};
-use crate::human::{human_time, run_status, signal_name, took};
+use crate::human::{human_time, run_status, summary, took};
 use crate::runlog::{self, Line, Stream};
 use crate::time;
 
@@ -104,7 +104,7 @@ pub fn run(ctx: &Context, name: &str, wait: bool) -> Result<ExitCode> {
     if ctx.json {
         output::json(&finished)?;
     } else {
-        println!("{}", footer(&finished));
+        println!("{}", summary(&finished));
     }
     Ok(ExitCode::from(finished.exit_status()))
 }
@@ -206,7 +206,7 @@ pub fn logs(ctx: &Context, args: LogsArgs) -> Result<()> {
             if printed == Some(0) {
                 println!("{}", paint.dim("(no output)"));
             }
-            println!("{}", footer(&ended));
+            println!("{}", summary(&ended));
             if ended.status == Status::Running {
                 println!("Follow it with `macron logs {} --follow`.", ended.job);
             }
@@ -224,7 +224,7 @@ fn log_path(ctx: &Context, run: &Run) -> std::path::PathBuf {
 /// Returns the run as it ended.
 fn follow(ctx: &Context, run: Run, printer: &Printer) -> Result<Run> {
     let history = ctx.macron.history()?;
-    let mut follower = ctx.macron.follow(run);
+    let mut follower = ctx.macron.follow(run, 0);
     loop {
         let (lines, ended) = follower.poll(&history)?;
         for line in &lines {
@@ -283,30 +283,4 @@ fn header(run: &Run) -> String {
         Trigger::Manual => "by hand",
     };
     format!("Run {} of {}, started {started} {by}.", run.id, run.job)
-}
-
-/// "Succeeded in 2s.", "Failed with exit status 3 after 2s.", and so on.
-fn footer(run: &Run) -> String {
-    let took = run.duration_ms.map(took).unwrap_or_default();
-    match (run.status, &run.error, run.exit_code, run.signal) {
-        (Status::Running, ..) => "Still running.".to_owned(),
-        (Status::Succeeded, ..) => format!("Succeeded in {took}."),
-        (Status::TimedOut, ..) => format!("Stopped at its timeout after {took}."),
-        (Status::Lost, error, ..) | (Status::Failed, error @ Some(_), ..) => {
-            let reason = error.as_deref().unwrap_or("no reason recorded");
-            let what = if run.status == Status::Lost {
-                "Lost"
-            } else {
-                "Could not start"
-            };
-            format!("{what}: {reason}.")
-        }
-        (Status::Failed, None, Some(code), _) => {
-            format!("Failed with exit status {code} after {took}.")
-        }
-        (Status::Failed, None, None, Some(signal)) => {
-            format!("Killed by {} after {took}.", signal_name(signal))
-        }
-        (Status::Failed, None, None, None) => format!("Failed after {took}."),
-    }
 }

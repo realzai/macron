@@ -18,3 +18,4 @@ pub mod paths;
 pub mod runlog;
 pub mod schedule;
 pub mod time;
+pub mod web;

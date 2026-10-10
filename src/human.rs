@@ -52,6 +52,32 @@ pub fn run_status(run: &Run) -> String {
     }
 }
 
+/// How a run went, as a sentence: "Succeeded in 2s.", "Failed with exit status 3 after 2s."
+pub fn summary(run: &Run) -> String {
+    let took = run.duration_ms.map(took).unwrap_or_default();
+    match (run.status, &run.error, run.exit_code, run.signal) {
+        (Status::Running, ..) => "Still running.".to_owned(),
+        (Status::Succeeded, ..) => format!("Succeeded in {took}."),
+        (Status::TimedOut, ..) => format!("Stopped at its timeout after {took}."),
+        (Status::Lost, error, ..) | (Status::Failed, error @ Some(_), ..) => {
+            let reason = error.as_deref().unwrap_or("no reason recorded");
+            let what = if run.status == Status::Lost {
+                "Lost"
+            } else {
+                "Could not start"
+            };
+            format!("{what}: {reason}.")
+        }
+        (Status::Failed, None, Some(code), _) => {
+            format!("Failed with exit status {code} after {took}.")
+        }
+        (Status::Failed, None, None, Some(signal)) => {
+            format!("Killed by {} after {took}.", signal_name(signal))
+        }
+        (Status::Failed, None, None, None) => format!("Failed after {took}."),
+    }
+}
+
 /// `SIGKILL` for 9, or `signal 99` for a number macOS does not name.
 pub fn signal_name(signal: i32) -> String {
     nix::sys::signal::Signal::try_from(signal).map_or_else(

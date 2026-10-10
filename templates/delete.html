@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ name }} · macron{% endblock %}
+{% block content %}
+<div class="narrow">
+  <h1>Delete {{ name }}?</h1>
+  <p>It is uninstalled from launchd and removed from <code>jobs.toml</code>.</p>
+  <form method="post" action="/jobs/{{ name }}/delete">
+    {% if runs > 0 %}
+    <label class="check"><input type="checkbox" name="purge"> Also delete its {{ runs }} recorded run{% if runs != 1 %}s{% endif %} and their output</label>
+    {% endif %}
+    <div class="form-actions">
+      <button class="button danger">Delete {{ name }}</button>
+      <a class="button" href="/jobs/{{ name }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

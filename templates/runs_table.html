@@ -1,0 +1,25 @@
+{% if rows.is_empty() %}
+<p class="muted">{{ empty }}</p>
+{% else %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Run</th>{% if show_job %}<th>Job</th>{% endif %}<th>Started</th><th>Took</th><th>Status</th><th>Trigger</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><a href="{{ row.url }}">#{{ row.id }}</a></td>
+        {% if show_job %}<td><a class="name" href="/jobs/{{ row.job }}">{{ row.job }}</a></td>{% endif %}
+        <td class="nowrap">{{ row.started }}</td>
+        <td class="nowrap">{{ row.took }}</td>
+        <td><a class="badge {{ row.class }}" href="{{ row.url }}">{{ row.status }}</a></td>
+        <td class="muted">{{ row.trigger }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}

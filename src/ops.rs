@@ -286,12 +286,13 @@ impl Macron {
         }
     }
 
-    /// Reads `run`'s log as it grows.
-    pub fn follow(&self, run: Run) -> Follower {
+    /// Reads `run`'s log as it grows, from byte `from` on: 0 for all of it, or where an earlier
+    /// read left off.
+    pub fn follow(&self, run: Run, from: u64) -> Follower {
         Follower {
             path: runlog::path(&self.paths, &run.job, run.id),
             run,
-            offset: 0,
+            offset: from,
         }
     }
 

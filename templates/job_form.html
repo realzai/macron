@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import "macros.html" as show %}
+{% block title %}{% if editing %}Edit {{ form.name }}{% else %}New job{% endif %} · macron{% endblock %}
+{% block content %}
+<div class="narrow">
+  <h1>{% if editing %}Edit {{ form.name }}{% else %}New job{% endif %}</h1>
+  {% if let Some(general) = errors.general %}<div class="error-box">{{ general }}</div>{% endif %}
+  <form method="post" action="{% if editing %}/jobs/{{ form.name }}{% else %}/jobs{% endif %}" class="job-form" novalidate>
+    {% if !editing %}
+    <label for="name">Name</label>
+    <input id="name" name="name" value="{{ form.name }}" autocomplete="off" spellcheck="false" placeholder="backup">
+    <p class="hint">Lowercase letters, digits, - and _. It cannot be changed later.</p>
+    {% call show::error(errors.get("name")) %}{% endcall %}
+    {% endif %}
+
+    <label for="schedule">Schedule</label>
+    <input id="schedule" name="schedule" value="{{ form.schedule }}" autocomplete="off" spellcheck="false" placeholder="0 9 * * 1-5" data-describe>
+    <p class="hint" data-description>{% if when.is_empty() %}Cron such as <code>0 9 * * 1-5</code>, a shorthand such as <code>@daily</code>, or <code>@every 15m</code>.{% else %}{{ when }}{% endif %}</p>
+    {% call show::error(errors.get("schedule")) %}{% endcall %}
+
+    <label for="command">Command</label>
+    <textarea id="command" name="command" rows="3" spellcheck="false" placeholder="~/bin/backup.sh">{{ form.command }}</textarea>
+    <p class="hint">Runs in a login shell, so your PATH is set up as in a terminal.</p>
+    {% call show::error(errors.get("command")) %}{% endcall %}
+
+    <label for="description">Description <span class="muted">optional</span></label>
+    <input id="description" name="description" value="{{ form.description }}" placeholder="What the job is for">
+
+    <label class="check"><input type="checkbox" name="enabled"{% if form.enabled.is_some() %} checked{% endif %}> Enabled, so launchd runs it on schedule</label>
+
+    <details{% if self.more_open() %} open{% endif %}>
+      <summary>More options</summary>
+
+      <label for="workdir">Working directory</label>
+      <input id="workdir" name="workdir" value="{{ form.workdir }}" spellcheck="false" placeholder="~">
+      {% call show::error(errors.get("workdir")) %}{% endcall %}
+
+      <label for="shell">Shell</label>
+      <input id="shell" name="shell" value="{{ form.shell }}" spellcheck="false" placeholder="/bin/zsh">
+      {% call show::error(errors.get("shell")) %}{% endcall %}
+
+      <label for="env">Environment</label>
+      <textarea id="env" name="env" rows="3" spellcheck="false" placeholder="KEY=value, one per line">{{ form.env }}</textarea>
+      {% call show::error(errors.get("env")) %}{% endcall %}
+
+      <label for="timeout">Timeout</label>
+      <input id="timeout" name="timeout" value="{{ form.timeout }}" spellcheck="false" placeholder="30m">
+      <p class="hint">Stop a run that takes longer than this. Leave empty for no limit.</p>
+      {% call show::error(errors.get("timeout")) %}{% endcall %}
+
+      <label for="notify">Notify</label>
+      <select id="notify" name="notify">
+        <option value=""{% if form.notify.is_empty() %} selected{% endif %}>When a run fails (default)</option>
+        <option value="failure"{% if form.notify == "failure" %} selected{% endif %}>When a run fails</option>
+        <option value="always"{% if form.notify == "always" %} selected{% endif %}>After every run</option>
+        <option value="never"{% if form.notify == "never" %} selected{% endif %}>Never</option>
+      </select>
+      {% call show::error(errors.get("notify")) %}{% endcall %}
+
+      <label for="keep_runs">Runs to keep</label>
+      <input id="keep_runs" name="keep_runs" value="{{ form.keep_runs }}" inputmode="numeric" placeholder="100">
+      {% call show::error(errors.get("keep_runs")) %}{% endcall %}
+    </details>
+
+    <div class="form-actions">
+      <button class="button primary">{% if editing %}Save{% else %}Add job{% endif %}</button>
+      <a class="button" href="{% if editing %}/jobs/{{ form.name }}{% else %}/{% endif %}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
