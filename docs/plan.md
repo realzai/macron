@@ -15,7 +15,7 @@ works* sections should stay true, and a change to either is a change to this fil
    from the CLI and from the web.
 3. Agents can drive it without a human: every command has a stable `--json` form and documented
    error codes, nothing prompts when there is no terminal, and the repo ships a skill.
-4. Open source on GitHub, installable with Homebrew or `cargo install`.
+4. Open source on GitHub, installable with one command, or with `cargo install`.
 
 ## Non-goals, for now
 
@@ -38,6 +38,7 @@ works* sections should stay true, and a change to either is a change to this fil
 | Web UI | `axum` serving server-rendered `askama` templates, one small hand-written script for what is live, assets embedded with `rust-embed` | No Node toolchain, so `cargo install` builds everything, and the binary is the whole product. The script is about 100 lines, so vendoring `htmx` would have added more than it saved |
 | Time | `jiff` | Correct next-run times across time zones and DST |
 | Packaging | One crate, `macron-cli`, with a library and a `macron` binary | `macron` is taken on crates.io. One crate keeps `cargo install` and publishing simple. Split only if a second consumer of the library appears |
+| Distribution | GitHub releases with dist's shell installer, and crates.io. No Homebrew for now | A tap is a public repository of its own (`realzai/homebrew-tap`), which we chose not to have. Revisit with homebrew-core once macron has users, or with a tap after all; dist can publish either |
 | launchd labels | `io.github.realzai.macron.<job>` | Reverse-DNS, and the prefix is how macron finds its own plists. It never touches a plist without it. The repo stays under `realzai`, so the prefix is permanent: changing it later would mean migrating every user's installed jobs |
 | License | MIT | |
 | Commits | Conventional Commits | The changelog is generated from them at release |
@@ -300,8 +301,9 @@ browser.
 README with screenshots. *Done when* an agent given only the skill can add a job and diagnose a
 failing one.
 
-**M5. Release.** `cargo-dist` for GitHub Releases and a Homebrew tap (`realzai/homebrew-tap`),
-crates.io publishing of `macron-cli`, a changelog, an MSRV check in CI, v0.1.0.
+**M5. Release.** `cargo-dist` for GitHub Releases with a shell installer, crates.io publishing of
+`macron-cli`, a changelog, an MSRV check in CI, v0.1.0. The Homebrew tap was dropped; see
+*Distribution* above.
 
 ## Traps
 
