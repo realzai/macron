@@ -9,6 +9,7 @@ pub mod duration;
 pub mod error;
 pub mod exec;
 pub mod history;
+pub mod human;
 pub mod job;
 pub mod launchd;
 pub mod notify;

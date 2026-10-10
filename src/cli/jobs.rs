@@ -9,9 +9,10 @@ use jiff::Zoned;
 use serde::Serialize;
 
 use super::Context;
-use super::output::{self, ago, human_time, run_status, tilde, took};
+use super::output;
 use crate::error::{Error, Result};
 use crate::history::Run;
+use crate::human::{ago, human_time, run_status, tilde, took};
 use crate::job::{JobSpec, Notify};
 use crate::launchd::{self, Action, Change};
 use crate::ops::{Changed, next_runs};

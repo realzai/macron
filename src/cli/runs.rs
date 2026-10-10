@@ -9,9 +9,10 @@ use jiff::{Timestamp, Zoned};
 use serde::Serialize;
 
 use super::Context;
-use super::output::{self, Paint, human_time, run_status, signal_name, took};
+use super::output::{self, Paint};
 use crate::error::Result;
 use crate::history::{Filter, Run, Status, Trigger};
+use crate::human::{human_time, run_status, signal_name, took};
 use crate::runlog::{self, Line, Stream};
 use crate::time;
 
