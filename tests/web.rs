@@ -4,6 +4,7 @@
 mod support;
 
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Stdio};
 use std::thread;
@@ -109,6 +110,41 @@ fn up_signs_a_browser_in_and_stops_cleanly() {
     let up_file = server.up_file.clone();
     assert!(server.stop(), "macron up should exit cleanly on Ctrl-C");
     assert!(!up_file.exists(), "up.json should be removed");
+}
+
+#[test]
+fn up_announces_itself_as_one_line_of_json() {
+    let sandbox = Sandbox::new();
+    let mut child = sandbox
+        .command(&["up", "--no-open", "--port", "0", "--json"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut line = String::new();
+    BufReader::new(child.stdout.take().unwrap())
+        .read_line(&mut line)
+        .unwrap();
+    let serving: serde_json::Value = serde_json::from_str(&line).unwrap();
+    let url = serving["url"].as_str().unwrap().to_owned();
+    let port: u16 = url
+        .strip_prefix("http://127.0.0.1:")
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(serving["pid"], child.id());
+    assert_eq!(serving["already_up"], false);
+    let sign_in = serving["sign_in_url"].as_str().unwrap();
+    let path = sign_in.strip_prefix(url.as_str()).unwrap();
+    assert_eq!(redirect(&http(port, "GET", path, None, None)), "/");
+
+    let again = sandbox.run(&["up", "--no-open", "--json"]).ok().json();
+    assert_eq!(again["url"], url);
+    assert_eq!(again["sign_in_url"], sign_in);
+    assert_eq!(again["already_up"], true);
+
+    kill(Pid::from_raw(child.id() as i32), Signal::SIGINT).unwrap();
+    assert!(child.wait().unwrap().success());
 }
 
 #[test]

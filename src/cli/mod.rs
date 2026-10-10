@@ -166,6 +166,7 @@ fn execute(command: Command, json: bool) -> Result<ExitCode> {
                 port,
                 open: !no_open,
                 rotate_token,
+                json,
             },
         )?,
         Command::Apply { dry_run } => jobs::apply(&ctx, dry_run)?,

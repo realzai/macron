@@ -48,6 +48,27 @@ pub struct Options {
     pub open: bool,
     /// Whether to replace the sign-in secret, signing out every browser.
     pub rotate_token: bool,
+    /// Whether to announce the server as one line of JSON instead of text.
+    pub json: bool,
+}
+
+/// What `macron up --json` prints, as one line, once the web UI is being served.
+#[derive(Serialize)]
+struct Serving {
+    url: String,
+    /// Signs a browser in, as the link `macron up` opens does.
+    sign_in_url: String,
+    /// The `macron up` process serving it, which stops on SIGINT or SIGTERM.
+    pid: u32,
+    /// Whether it was already being served, by another `macron up`.
+    already_up: bool,
+}
+
+impl Serving {
+    fn print(&self) -> Result<()> {
+        println!("{}", serde_json::to_string(self)?);
+        Ok(())
+    }
 }
 
 /// Serves the web UI until Ctrl-C. If it is already being served, opens that instead.
@@ -60,9 +81,20 @@ pub fn up(macron: Macron, options: Options) -> Result<()> {
             });
         }
         let token = security::token(&paths, false)?;
-        println!("macron is already up at {}", base_url(instance.port));
+        let sign_in = security::sign_in_url(instance.port, &token);
+        if options.json {
+            Serving {
+                url: base_url(instance.port),
+                sign_in_url: sign_in.clone(),
+                pid: instance.pid,
+                already_up: true,
+            }
+            .print()?;
+        } else {
+            println!("macron is already up at {}", base_url(instance.port));
+        }
         if options.open {
-            open_browser(&security::sign_in_url(instance.port, &token));
+            open_browser(&sign_in);
         }
         return Ok(());
     }
@@ -84,15 +116,27 @@ async fn serve(macron: Macron, token: String, options: Options) -> Result<()> {
     let instance = Instance::record(&paths, port)?;
 
     let sign_in = security::sign_in_url(port, &token);
-    println!("macron is up at {}", base_url(port));
-    if options.open {
-        println!("Opening it in your browser. If it does not open, this link signs you in:");
-        open_browser(&sign_in);
+    if options.json {
+        Serving {
+            url: base_url(port),
+            sign_in_url: sign_in.clone(),
+            pid: instance.pid,
+            already_up: false,
+        }
+        .print()?;
     } else {
-        println!("This link signs you in:");
+        println!("macron is up at {}", base_url(port));
+        if options.open {
+            println!("Opening it in your browser. If it does not open, this link signs you in:");
+        } else {
+            println!("This link signs you in:");
+        }
+        println!("  {sign_in}");
+        println!("Press Ctrl-C to stop.");
     }
-    println!("  {sign_in}");
-    println!("Press Ctrl-C to stop.");
+    if options.open {
+        open_browser(&sign_in);
+    }
 
     let (stop, stopping) = watch::channel(false);
     let app = router(AppState::new(macron, token, port, stopping));
