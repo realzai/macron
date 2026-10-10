@@ -187,7 +187,7 @@ error. Error codes are a contract and live in `src/error.rs`. Nothing prompts wi
 
 | Command | Does |
 |---|---|
-| `macron up [--port N] [--no-open] [--rotate-token]` | Starts the web UI and opens the browser. If one is already running, opens that instead |
+| `macron up [--port N] [--no-open] [--rotate-token]` | Starts the web UI and opens the browser. If one is already running, opens that instead. With `--json`, one line with the URL, the sign-in link and the pid |
 | `macron ls` | Jobs: schedule, its description, next run, last run status and time, enabled |
 | `macron show <job>` | One job in full, with its generated launchd schedule |
 | `macron add <job> --schedule <s> [options] -- <command…>` | Adds a job and installs it |
@@ -252,7 +252,9 @@ to end against `macron up` (`tests/web.rs`).
   Installable with `npx skills add realzai/macron`.
 - `docs/cli.md` is generated from the clap definitions, and CI fails if it is out of date, so the
   reference cannot drift from the binary.
-- `docs/json.md` documents each command's JSON shape and every error code.
+- `docs/json.md` documents each command's JSON shape and every error code. `tests/docs.rs` fails
+  when a code or a printed field is missing from it, and when the skill names a code that does not
+  exist.
 - `AGENTS.md` is for agents working *on* macron; the skill is for agents *using* it.
 
 ## Testing
@@ -294,7 +296,7 @@ stderr in `macron logs`.
 edit, enable, disable, delete and run now. *Done when* everything from M1 and M2 can be done in the
 browser.
 
-**M4. Agents and docs.** The skill, the generated CLI reference, the JSON reference, `doctor`, a
+**M4. Agents and docs (done).** The skill, the generated CLI reference, the JSON reference, `doctor`, a
 README with screenshots. *Done when* an agent given only the skill can add a job and diagnose a
 failing one.
 
