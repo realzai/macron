@@ -76,3 +76,7 @@ included, is set up as in a terminal. Add `--json` to any command for machine-re
 ## Contributing
 
 See [`AGENTS.md`](AGENTS.md). It applies to people as much as to agents.
+
+## License
+
+[MIT](LICENSE)

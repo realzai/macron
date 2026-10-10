@@ -38,7 +38,8 @@ works* sections should stay true, and a change to either is a change to this fil
 | Web UI | `axum` serving server-rendered `askama` templates, `htmx` for interaction, assets embedded with `rust-embed` | No Node toolchain, so `cargo install` builds everything, and the binary is the whole product |
 | Time | `jiff` | Correct next-run times across time zones and DST |
 | Packaging | One crate, `macron-cli`, with a library and a `macron` binary | `macron` is taken on crates.io. One crate keeps `cargo install` and publishing simple. Split only if a second consumer of the library appears |
-| launchd labels | `io.github.realzai.macron.<job>` | Reverse-DNS, and the prefix is how macron finds its own plists. It never touches a plist without it |
+| launchd labels | `io.github.realzai.macron.<job>` | Reverse-DNS, and the prefix is how macron finds its own plists. It never touches a plist without it. The repo stays under `realzai`, so the prefix is permanent: changing it later would mean migrating every user's installed jobs |
+| License | MIT | |
 | Commits | Conventional Commits | The changelog is generated from them at release |
 
 ## How it works
@@ -294,11 +295,3 @@ These are why the design looks the way it does. Each one belongs in the skill an
   run` reports that instead of appearing to work.
 - **DST.** On the night the clocks change, a job scheduled inside the skipped or repeated hour runs
   when launchd decides. The predicted next run can disagree on those two nights; say so in the UI.
-
-## Open questions
-
-- **License.** Not chosen. `publish = false` is set in `Cargo.toml` until it is. MIT OR Apache-2.0
-  is the Rust convention.
-- **Label prefix.** `io.github.realzai.macron` ties installed jobs to this GitHub account. If the
-  repo moves to an organisation, changing the prefix needs a migration in `apply`. Decide before
-  v0.1.0, after which it is part of every user's installed state.

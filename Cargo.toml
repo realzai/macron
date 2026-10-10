@@ -7,9 +7,9 @@ rust-version = "1.89"
 description = "Schedule, run and watch local jobs on macOS, backed by launchd, from a CLI or a local web UI"
 repository = "https://github.com/realzai/macron"
 readme = "README.md"
+license = "MIT"
 keywords = ["cron", "launchd", "macos", "scheduler", "cli"]
 categories = ["command-line-utilities"]
-publish = false
 
 [lib]
 name = "macron"
