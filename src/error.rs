@@ -58,6 +58,9 @@ pub enum Error {
     #[error("{0} needs --yes when there is no terminal to confirm on")]
     ConfirmationRequired(String),
 
+    #[error("cannot read the run log {}: {reason}", path.display())]
+    InvalidLog { path: PathBuf, reason: String },
+
     #[error("run history: {0}")]
     Database(#[from] rusqlite::Error),
 
@@ -87,6 +90,7 @@ impl Error {
             Error::Launchctl { .. } => "launchctl",
             Error::Spawn { .. } => "spawn_failed",
             Error::ConfirmationRequired(_) => "confirmation_required",
+            Error::InvalidLog { .. } => "invalid_log",
             Error::Database(_) => "database",
             Error::HistoryTooNew { .. } => "history_too_new",
             Error::Json(_) => "internal",

@@ -14,6 +14,7 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::exec;
 use crate::launchd::Launchctl;
+use crate::notify::Notifier;
 use crate::paths::Paths;
 
 /// Exit status for a command line that does not parse. It is clap's own, so it is the same with or
@@ -154,11 +155,12 @@ fn paths(ctx: &Context) -> Result<()> {
     Ok(())
 }
 
-/// Runs the job and exits as it did. Its output goes where launchd sends this process's.
+/// Runs the job, recording it, and exits as it did.
 fn exec(ctx: &Context, name: &str) -> Result<ExitCode> {
     let config = ctx.config()?;
     let job = config.job(name)?;
-    let outcome = exec::run(job, &ctx.paths.home)?;
+    let trigger = exec::take_trigger(&ctx.paths, name);
+    let outcome = exec::run(job, trigger, &ctx.paths, &Notifier::from_env())?;
     if let (exec::Outcome::TimedOut, Some(timeout)) = (outcome, job.timeout()) {
         eprintln!("macron: stopped `{name}` when it reached its timeout of {timeout}");
     }

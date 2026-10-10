@@ -338,6 +338,12 @@ impl History {
         Ok(ids)
     }
 
+    /// Deletes a run as if it never happened, for one that will not be recorded after all.
+    pub fn discard(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM runs WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
     /// Deletes every finished run of the job, returning how many.
     pub fn purge(&self, job: &str) -> Result<usize> {
         Ok(self.conn.execute(
