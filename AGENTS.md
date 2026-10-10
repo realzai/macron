@@ -28,6 +28,10 @@ change done.
 | `src/lib.rs` | The library. The CLI and the web UI are both clients of it |
 | `src/ops.rs` | Every operation macron offers, through `Macron`. The CLI and the web UI both call it |
 | `src/cli/` | Argument parsing and rendering only. No logic a web handler would also need |
+| `src/web/` | The web UI: the server and its security rules (`security.rs` explains them), and the pages |
+| `templates/` | The web UI's pages, as askama templates. Escaping is automatic; `\|safe` only for HTML macron rendered itself |
+| `assets/` | The web UI's stylesheet and script, embedded in the binary. No inline scripts or styles: the content security policy forbids them |
+| `src/human.rs` | Times, durations and run statuses in words, shared by the CLI and the web UI |
 | `src/schedule/` | Parsing schedules, converting them for launchd, describing them, predicting runs |
 | `src/job.rs` | A job and its validation |
 | `src/config.rs` | Reading `jobs.toml`, and editing it without losing comments |
