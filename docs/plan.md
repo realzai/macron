@@ -301,7 +301,7 @@ browser.
 README with screenshots. *Done when* an agent given only the skill can add a job and diagnose a
 failing one.
 
-**M5. Release.** `cargo-dist` for GitHub Releases with a shell installer, crates.io publishing of
+**M5. Release (done).** `cargo-dist` for GitHub Releases with a shell installer, crates.io publishing of
 `macron-cli`, a changelog, an MSRV check in CI, v0.1.0. The Homebrew tap was dropped; see
 *Distribution* above.
 
